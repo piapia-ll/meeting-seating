@@ -5564,6 +5564,13 @@ input:focus {
     animation: modalSpringIn 0.5s var(--spring-default);
 }
 
+.batch-copy-dialog { width: min(460px, calc(100vw - 32px)); padding: 28px; }
+.batch-copy-dialog h3 { margin: 0 0 8px; font-size: 22px; line-height: 1.25; }
+.batch-copy-dialog p { margin: 0 0 14px; color: var(--text-secondary); line-height: 1.5; }
+.batch-copy-dialog textarea { display: block; width: 100%; min-height: 150px; box-sizing: border-box; resize: vertical; margin: 0 0 18px; padding: 12px; border: 1px solid #c7cbd4; border-radius: 12px; font: inherit; line-height: 1.5; }
+.batch-copy-dialog .modal-actions { display: flex; gap: 12px; }
+.batch-copy-dialog .modal-actions .btn { flex: 1; }
+
 body.cloud-login-locked {
     overflow: hidden;
 }
@@ -5741,18 +5748,23 @@ body.cloud-login-locked {
 .plugin-hub-header h3 {
     margin: 0;
     font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
 }
 
 .plugin-hub-header p {
     margin: 6px 0 0;
     color: var(--text-secondary);
     font-size: 13px;
+    line-height: 1.55;
+    max-width: 560px;
 }
 
 .plugin-hub-header-actions {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .plugin-hub-grid {
@@ -5760,15 +5772,15 @@ body.cloud-login-locked {
     flex: 1 1 auto;
     display: grid;
     grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-    gap: 12px;
+    gap: 14px;
 }
 
 .plugin-hub-section {
     min-height: 0;
-    border: 1px solid var(--border-color);
-    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 16px;
     background: rgba(255, 255, 255, 0.92);
-    padding: 12px;
+    padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -5790,58 +5802,163 @@ body.cloud-login-locked {
 }
 
 .plugin-hub-card {
-    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.16);
-    border-radius: 12px;
-    background: rgba(var(--primary-color-rgb, 10, 89, 247), 0.04);
-    padding: 10px;
+    border: 1px solid rgba(15, 23, 42, 0.09);
+    border-radius: 16px;
+    background: #fff;
+    padding: 14px;
     display: grid;
-    gap: 8px;
+    gap: 10px;
+    align-content: start;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.plugin-hub-card.is-disabled {
+    opacity: 0.6;
 }
 
 .plugin-hub-card-head {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.plugin-hub-card-headtext {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
 }
 
 .plugin-hub-card-title {
     font-weight: 700;
-    font-size: 14px;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+.plugin-hub-card-subtitle {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--text-secondary);
+    word-break: break-all;
 }
 
 .plugin-hub-card-version {
     color: var(--text-secondary);
     font-size: 12px;
+    white-space: nowrap;
+    padding-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+
+.plugin-hub-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.plugin-status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border-radius: 999px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.plugin-status-chip.on {
+    color: #1f8f43;
+    background: rgba(52, 199, 89, 0.12);
+    border-color: rgba(52, 199, 89, 0.32);
+}
+
+.plugin-status-chip.off {
+    color: var(--text-secondary);
+    background: rgba(120, 120, 128, 0.12);
+    border-color: rgba(120, 120, 128, 0.28);
+}
+
+.plugin-status-chip.trusted {
+    color: #b96a00;
+    background: rgba(255, 159, 10, 0.12);
+    border-color: rgba(255, 159, 10, 0.34);
+}
+
+.plugin-status-chip.sandboxed {
+    color: var(--primary-color);
+    background: rgba(var(--primary-color-rgb, 10, 89, 247), 0.09);
+    border-color: rgba(var(--primary-color-rgb, 10, 89, 247), 0.26);
+}
+
+.plugin-status-chip.neutral {
+    color: var(--text-secondary);
+    background: rgba(120, 120, 128, 0.1);
+    border-color: rgba(120, 120, 128, 0.22);
+    font-variant-numeric: tabular-nums;
 }
 
 .plugin-hub-card-desc {
     color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+.plugin-hub-card-error {
+    border-radius: 10px;
+    background: rgba(255, 59, 48, 0.08);
+    border: 1px solid rgba(255, 59, 48, 0.26);
+    color: #a12622;
     font-size: 12px;
+    padding: 8px 10px;
+    line-height: 1.5;
+    word-break: break-word;
 }
 
 .plugin-hub-card-row {
     display: flex;
-    gap: 8px;
+    gap: 7px;
     flex-wrap: wrap;
 }
 
 .plugin-hub-chip-btn {
-    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.22);
-    background: rgba(255, 255, 255, 0.92);
-    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.24);
+    background: #fff;
+    color: var(--primary-color);
     border-radius: 999px;
     min-height: 30px;
-    padding: 0 12px;
+    padding: 0 13px;
     cursor: pointer;
     font-size: 12px;
     font-weight: 600;
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.plugin-hub-chip-btn .plugin-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.85;
 }
 
 .plugin-hub-chip-btn.primary {
     background: var(--primary-color);
     border-color: var(--primary-color);
     color: #fff;
+}
+
+.plugin-hub-chip-btn.primary .plugin-chip-icon {
+    opacity: 1;
+}
+
+.plugin-hub-chip-btn:active {
+    transform: scale(0.97);
 }
 
 .plugin-hub-runtime-form {
@@ -5916,22 +6033,41 @@ body.cloud-login-locked {
 }
 
 .plugin-quick-launch-btn {
-    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.22);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.24);
     background: #fff;
-    color: var(--text-primary);
+    color: var(--primary-color);
     border-radius: 999px;
     min-height: 30px;
-    padding: 0 12px;
+    padding: 0 13px;
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
+    transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.plugin-quick-launch-btn .plugin-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.85;
 }
 
 .plugin-quick-launch-btn.primary {
     background: var(--primary-color);
     color: #fff;
     border-color: var(--primary-color);
+}
+
+.plugin-quick-launch-btn.primary .plugin-chip-icon {
+    opacity: 1;
+}
+
+.plugin-quick-launch-btn:active {
+    transform: scale(0.96);
 }
 
 .plugin-command-modal-content {
@@ -5966,61 +6102,120 @@ body.cloud-login-locked {
 #pluginCommandInput {
     border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.25);
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 11px 14px;
     font-size: 14px;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+#pluginCommandInput:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(var(--primary-color-rgb, 10, 89, 247), 0.16);
+}
+
+#pluginCommandInput::placeholder {
+    color: var(--text-secondary);
 }
 
 .plugin-command-list {
     min-height: 0;
     flex: 1 1 auto;
     overflow: auto;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    background: #f8fbff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 14px;
+    background: rgba(120, 120, 128, 0.05);
     padding: 8px;
     display: grid;
-    gap: 8px;
+    gap: 6px;
+    align-content: start;
 }
 
 .plugin-command-item {
-    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.15);
-    border-radius: 10px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 12px;
     background: #fff;
-    padding: 10px;
+    padding: 10px 12px;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 11px;
     cursor: pointer;
+    text-align: left;
+    transition: border-color 0.18s ease, background-color 0.18s ease;
 }
 
 .plugin-command-item:hover {
-    border-color: rgba(var(--primary-color-rgb, 10, 89, 247), 0.28);
-    box-shadow: 0 6px 14px rgba(var(--primary-color-rgb, 10, 89, 247), 0.08);
+    border-color: rgba(var(--primary-color-rgb, 10, 89, 247), 0.3);
+    background: rgba(var(--primary-color-rgb, 10, 89, 247), 0.04);
+}
+
+.plugin-command-item-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: rgba(var(--primary-color-rgb, 10, 89, 247), 0.1);
+    color: var(--primary-color);
+    flex-shrink: 0;
+}
+
+.plugin-command-item-icon svg {
+    width: 15px;
+    height: 15px;
 }
 
 .plugin-command-item-main {
     display: grid;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .plugin-command-item-title {
     font-size: 13px;
     font-weight: 700;
+    letter-spacing: -0.005em;
 }
 
 .plugin-command-item-desc {
     font-size: 12px;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .plugin-command-item-kind {
     font-size: 11px;
+    font-weight: 600;
     color: var(--primary-color);
-    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.2);
+    border: 1px solid rgba(var(--primary-color-rgb, 10, 89, 247), 0.22);
+    background: rgba(var(--primary-color-rgb, 10, 89, 247), 0.07);
     border-radius: 999px;
     padding: 2px 10px;
     white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.plugin-command-item-kind.kind-uiOpen,
+.plugin-command-item-kind.kind-uiJson {
+    color: #0a84ff;
+    border-color: rgba(10, 132, 255, 0.26);
+    background: rgba(10, 132, 255, 0.08);
+}
+
+.plugin-command-item-kind.kind-action {
+    color: #b96a00;
+    border-color: rgba(255, 159, 10, 0.3);
+    background: rgba(255, 159, 10, 0.1);
+}
+
+.plugin-command-item-kind.kind-workspaceApply {
+    color: #1f8f43;
+    border-color: rgba(52, 199, 89, 0.3);
+    background: rgba(52, 199, 89, 0.1);
 }
 
 @media (max-width: 980px) {
@@ -8754,6 +8949,12 @@ body.cloud-connectivity-locked {
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
     font-size: 13px;
     color: #92610a;
+}
+
+/* display:flex 会覆盖 hidden 属性的 UA 默认样式，必须显式兜底，
+   否则提示条从页面加载起就一直可见。 */
+.layout-remote-hint[hidden] {
+    display: none;
 }
 
 .layout-remote-hint .btn {

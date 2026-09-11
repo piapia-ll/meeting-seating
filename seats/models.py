@@ -561,3 +561,28 @@ class OnboardingState(models.Model):
 
     def __str__(self):
         return f"{self.session_key}-{'seen' if self.seen else 'new'}"
+
+
+class PluginRuntimeKV(models.Model):
+    """Plugin Core 的命名空间持久化；secrets 值由存储适配器加密后写入。"""
+
+    plugin_id = models.CharField(max_length=64, db_index=True, verbose_name='插件 ID')
+    namespace = models.CharField(max_length=32, verbose_name='命名空间')
+    key = models.CharField(max_length=160, verbose_name='键')
+    value = models.TextField(blank=True, default='', verbose_name='JSON 值')
+    is_secret = models.BooleanField(default=False, verbose_name='加密值')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '插件运行时数据'
+        verbose_name_plural = verbose_name
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plugin_id', 'namespace', 'key'],
+                name='plugin_runtime_kv_unique',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['plugin_id', 'namespace'], name='plugin_runtime_ns_idx'),
+        ]

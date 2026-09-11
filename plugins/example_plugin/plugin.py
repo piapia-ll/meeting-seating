@@ -1,7 +1,7 @@
 PLUGIN_META = {
     'id': 'example_plugin',
     'name': '示例插件',
-    'version': '2.0.0',
+    'version': '3.0.0',
     'description': '演示插件系统全部能力：hook / action / UI script（含全组件）。',
     'author': '老三',
     'website': 'www.577622.xyz',
@@ -44,7 +44,7 @@ ui = components.page(
     theme={'primary': '#0a59f7', 'style': 'apple-like'},
     blocks=[
         components.badge('运行中', 'success'),
-        components.badge('v2.0.0', 'primary'),
+        components.badge('v3.0.0', 'primary'),
         components.badge('示例插件', 'neutral'),
         components.badge('老三出品', 'neutral'),
 
@@ -73,7 +73,7 @@ ui = components.page(
         components.section('详细信息'),
 
         components.text('插件说明', '这是一个示例插件，用于演示脚本式 UI 生成系统的全部组件类型。'
-            '包括指标卡、进度条、徽章、分割线、段落标题、文本、列表、表格和动作按钮。'
+            '包括指标卡、进度条、徽章、分割线、段落标题、文本、列表、表格、表单、标签页、提示、按钮和弹窗。'
             '所有组件均支持 span 参数控制列宽，渲染器基于 12 列 grid 自动排版。'),
 
         components.list('功能清单', [
@@ -105,7 +105,58 @@ ui = components.page(
                 {'component': 'actions', 'default_span': '12', 'desc': '全宽按钮组'},
                 {'component': 'divider', 'default_span': '12', 'desc': '全宽分割线'},
                 {'component': 'section', 'default_span': '12', 'desc': '全宽段落标题'},
+                {'component': 'form', 'default_span': '12', 'desc': '交互表单容器'},
+                {'component': 'tabs', 'default_span': '12', 'desc': '标签页容器'},
+                {'component': 'alert', 'default_span': '12', 'desc': '状态提示'},
+                {'component': 'button', 'default_span': '12', 'desc': '单一动作按钮'},
+                {'component': 'modal', 'default_span': '12', 'desc': '弹窗容器'},
             ],
+        ),
+
+        components.divider(),
+
+        components.section('交互组件', '表单、标签页、提示、按钮和弹窗'),
+
+        components.alert('协议就绪', '当前示例已输出 Plugin API v1 交互组件。', 'success'),
+
+        components.form(
+            title='组件调试表单',
+            action='health',
+            method='POST',
+            submit_label='提交测试',
+            description='演示五类表单字段。',
+            fields=[
+                components.input('keyword', '关键词', placeholder='输入文本', span=6),
+                components.select('limit', '数量', options=[10, 20, 50], value=20, span=6),
+                components.textarea('note', '备注', placeholder='输入多行文本', rows=3, span=12),
+                components.checkbox('include_empty', '包含空数据', checked=False, span=6),
+                components.radio('mode', '模式', options=[
+                    {'value': 'normal', 'label': '标准'},
+                    {'value': 'compact', 'label': '紧凑'},
+                ], value='normal', span=6),
+            ],
+        ),
+
+        components.tabs(items=[
+            {
+                'id': 'overview',
+                'label': '概览',
+                'blocks': [components.text('标签页内容', '第一个标签页。')],
+            },
+            {
+                'id': 'status',
+                'label': '状态',
+                'blocks': [components.alert('运行状态', '插件运行正常。', 'info')],
+            },
+        ], active='overview'),
+
+        components.button('执行健康检查', action='health', method='POST', payload={'source': 'button'}),
+
+        components.modal(
+            'example-help',
+            '示例插件说明',
+            blocks=[components.text('说明', '这是由后端协议描述的弹窗内容。')],
+            trigger_label='查看弹窗示例',
         ),
 
         components.divider(),
@@ -133,7 +184,22 @@ ui = components.page(
 
 
 def register(registry):
-    registry.register_hook('classroom_created', _on_classroom_created)
+    registry.register_hook('classroom_created', _on_classroom_created, priority=100)
     registry.register_action('health', _health, methods=('GET', 'POST'), description='插件健康检查与回显')
     registry.register_action('reset_demo', _reset_demo, methods=('POST',), description='重置演示数据')
+    registry.register_command(
+        'example.health',
+        title='示例插件：健康检查',
+        description='运行示例插件健康检查',
+        action='health',
+        placements=('command_palette', 'workspace.toolbar'),
+    )
+    registry.contribute(
+        'workspace.toolbar',
+        {
+            'id': 'example-health',
+            'label': '插件检查',
+            'command': 'example.health',
+        },
+    )
     registry.register_ui_script('dashboard', EXAMPLE_UI_SCRIPT, methods=('GET', 'POST'), description='全组件演示仪表盘')

@@ -26,7 +26,8 @@
         <div class="settings-rail-inner">
             <button type="button" class="settings-account-chip" data-settings-goto="cloud" aria-label="云服务账户">
                 <span class="settings-account-avatar" id="settings-account-avatar" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z" fill="currentColor"/></svg>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v2h20v-2c0-3.3-6.7-5-10-5z" fill="currentColor"/></svg>
+                    <img class="settings-account-avatar-image" id="settings-account-avatar-image" alt="" hidden>
                 </span>
                 <span class="settings-account-copy">
                     <strong id="settings-account-name">未登录云服务</strong>
@@ -36,31 +37,31 @@
 
             <nav class="settings-nav" aria-label="设置分区">
                 <button type="button" class="settings-nav-item active" data-settings-nav="appearance">
-                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.7"/><path d="M12 3.8a8.2 8.2 0 0 0 0 16.4c1.4 0 2-1 2-2s-.7-1.7-.7-2.5c0-.9.7-1.5 1.7-1.5h2c1.9 0 3.2-1.4 3.2-3.6C20.2 6.3 16.6 3.8 12 3.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.2" cy="10.4" r="1.15" fill="currentColor"/><circle cx="12" cy="7.8" r="1.15" fill="currentColor"/><circle cx="15.8" cy="10.4" r="1.15" fill="currentColor"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.7"/><path d="M12 3.8a8.2 8.2 0 0 0 0 16.4c1.4 0 2-1 2-2s-.7-1.7-.7-2.5c0-.9.7-1.5 1.7-1.5h2c1.9 0 3.2-1.4 3.2-3.6C20.2 6.3 16.6 3.8 12 3.8z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="8.2" cy="10.4" r="1.15" fill="currentColor"/><circle cx="12" cy="7.8" r="1.15" fill="currentColor"/><circle cx="15.8" cy="10.4" r="1.15" fill="currentColor"/></svg>
                     <span>外观</span>
                 </button>
                 <button type="button" class="settings-nav-item" data-settings-nav="arrange">
-                    <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2.2"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="4" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7"/><rect x="13" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2.2"/></svg>
                     <span>排座偏好</span>
                 </button>
                 <button type="button" class="settings-nav-item" data-settings-nav="cloud" data-client-feature="cloud_sync">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M7.5 18.5h9.8a4.2 4.2 0 0 0 .7-8.3 6.4 6.4 0 0 0-12.2-1.8 5 5 0 0 0 1.7 10.1z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M7.5 18.5h9.8a4.2 4.2 0 0 0 .7-8.3 6.4 6.4 0 0 0-12.2-1.8 5 5 0 0 0 1.7 10.1z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span>云服务</span>
                 </button>
                 <button type="button" class="settings-nav-item" data-settings-nav="subscription">
-                    <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="6" width="17" height="13" rx="2.6" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 10.5h17" stroke="currentColor" stroke-width="1.7"/><path d="M7 14.8h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="6" width="17" height="13" rx="2.6" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 10.5h17" stroke="currentColor" stroke-width="1.7"/><path d="M7 14.8h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
                     <span>订阅计划</span>
                 </button>
                 <button type="button" class="settings-nav-item" data-settings-nav="update" data-client-feature="check_update">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 4.5v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19.5h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 4.5v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19.5h14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
                     <span>软件更新</span>
                 </button>
                 <button type="button" class="settings-nav-item" data-settings-nav="privacy">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.5 5 6v6c0 4.4 3 7.4 7 8.5 4-1.1 7-4.1 7-8.5V6l-7-2.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m9 12 2.2 2.2L15.5 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M12 3.5 5 6v6c0 4.4 3 7.4 7 8.5 4-1.1 7-4.1 7-8.5V6l-7-2.5z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m9 12 2.2 2.2L15.5 10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <span>数据与隐私</span>
                 </button>
                 <button type="button" class="settings-nav-item" data-settings-nav="about" data-client-feature="about_page" data-client-feature-mode="hide">
-                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5m0-8.2v.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+                    <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.4" stroke="currentColor" stroke-width="1.7"/><path d="M12 11v5m0-8.2v.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
                     <span>关于</span>
                 </button>
             </nav>
@@ -77,7 +78,7 @@
         <section class="settings-panel active" data-settings-panel="appearance">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 3.8a8.2 8.2 0 0 0 0 16.4c1.4 0 2-1 2-2s-.7-1.7-.7-2.5c0-.9.7-1.5 1.7-1.5h2c1.9 0 3.2-1.4 3.2-3.6C20.2 6.3 16.6 3.8 12 3.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.2" stroke="currentColor" stroke-width="1.6"/><path d="M12 3.8a8.2 8.2 0 0 0 0 16.4c1.4 0 2-1 2-2s-.7-1.7-.7-2.5c0-.9.7-1.5 1.7-1.5h2c1.9 0 3.2-1.4 3.2-3.6C20.2 6.3 16.6 3.8 12 3.8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
                 </span>
                 <div>
                     <h1>外观</h1>
@@ -100,7 +101,7 @@
         <section class="settings-panel" data-settings-panel="arrange">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.6 2.2"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.8" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.6 2.2"/></svg>
                 </span>
                 <div>
                     <h1>排座偏好</h1>
@@ -151,7 +152,7 @@
         <section class="settings-panel" data-settings-panel="cloud" data-client-feature="cloud_sync">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M7.5 18.5h9.8a4.2 4.2 0 0 0 .7-8.3 6.4 6.4 0 0 0-12.2-1.8 5 5 0 0 0 1.7 10.1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M7.5 18.5h9.8a4.2 4.2 0 0 0 .7-8.3 6.4 6.4 0 0 0-12.2-1.8 5 5 0 0 0 1.7 10.1z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </span>
                 <div>
                     <h1>云服务</h1>
@@ -278,7 +279,7 @@
         <section class="settings-panel" data-settings-panel="subscription">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="6" width="17" height="13" rx="2.6" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 10.5h17" stroke="currentColor" stroke-width="1.6"/><path d="M7 14.8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="6" width="17" height="13" rx="2.6" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 10.5h17" stroke="currentColor" stroke-width="1.6"/><path d="M7 14.8h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
                 </span>
                 <div>
                     <h1>订阅计划</h1>
@@ -298,7 +299,7 @@
         <section class="settings-panel" data-settings-panel="update" data-client-feature="check_update">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 4.5v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 4.5v11m0 0 4-4m-4 4-4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 19.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
                 </span>
                 <div>
                     <h1>软件更新</h1>
@@ -338,7 +339,7 @@
         <section class="settings-panel" data-settings-panel="privacy">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 3.5 5 6v6c0 4.4 3 7.4 7 8.5 4-1.1 7-4.1 7-8.5V6l-7-2.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m9 12 2.2 2.2L15.5 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 3.5 5 6v6c0 4.4 3 7.4 7 8.5 4-1.1 7-4.1 7-8.5V6l-7-2.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m9 12 2.2 2.2L15.5 10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </span>
                 <div>
                     <h1>数据与隐私</h1>
@@ -414,7 +415,7 @@
         <section class="settings-panel" data-settings-panel="about" data-client-feature="about_page" data-client-feature-mode="hide">
             <header class="settings-panel-head">
                 <span class="settings-panel-glyph settings-about-icon-lg" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
                         <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor"/>
                         <rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor" fill-opacity="0.7"/>
                         <rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor" fill-opacity="0.7"/>
@@ -428,7 +429,7 @@
             </header>
             <div class="settings-about-hero">
                 <div class="settings-about-logo" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
                         <rect x="3" y="3" width="7" height="7" rx="2" fill="currentColor"/>
                         <rect x="14" y="3" width="7" height="7" rx="2" fill="currentColor" fill-opacity="0.7"/>
                         <rect x="3" y="14" width="7" height="7" rx="2" fill="currentColor" fill-opacity="0.7"/>
@@ -479,7 +480,7 @@
 </div>
 {% endblock %}
 
-{% block extra_scripts %}
+{% block extra_head %}
 <style>
 /* ===== 设置页 v2：侧栏导航 + 内容面板 ===== */
 .settings-app {
@@ -530,12 +531,30 @@
     background: rgba(var(--primary-color-rgb, 10, 89, 247), 0.1);
     color: var(--primary-color);
     overflow: hidden;
+    position: relative;
 }
 
-.settings-account-avatar svg { width: 18px; height: 18px; }
+.settings-account-avatar svg {
+    width: 18px;
+    height: 18px;
+    transition: opacity 120ms ease;
+}
 
 .settings-account-avatar.has-image { background: transparent; }
-.settings-account-avatar.has-image img { width: 100%; height: 100%; object-fit: cover; }
+.settings-account-avatar-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    visibility: hidden;
+}
+.settings-account-avatar.has-image svg { opacity: 0; }
+.settings-account-avatar.has-image .settings-account-avatar-image {
+    opacity: 1;
+    visibility: visible;
+}
 
 .settings-account-copy {
     display: flex;
@@ -1470,7 +1489,9 @@
     .theme-card { transition: none; }
 }
 </style>
+{% endblock %}
 
+{% block extra_scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const themePicker = document.getElementById('theme-picker');
@@ -2016,7 +2037,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (localOpenAPIGenerateBtn) localOpenAPIGenerateBtn.addEventListener('click', async function() {
             var rotating = localOpenAPIRevokeBtn && !localOpenAPIRevokeBtn.hidden;
-            if (rotating && !window.confirm('重新生成会立即停用旧 Key，确定继续吗？')) return;
+            if (rotating && !(await window.showConfirmModal('重新生成会立即停用旧 Key，确定继续吗？', { title: '重新生成 Key' }))) return;
             localOpenAPIGenerateBtn.disabled = true;
             localOpenAPIGenerateBtn.textContent = rotating ? '重新生成中...' : '生成中...';
             try {
@@ -2034,7 +2055,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (localOpenAPIRevokeBtn) localOpenAPIRevokeBtn.addEventListener('click', async function() {
-            if (!window.confirm('撤销后，使用当前 Key 的服务器本机程序会立即失去访问权限。确定撤销吗？')) return;
+            if (!(await window.showConfirmModal('撤销后，使用当前 Key 的服务器本机程序会立即失去访问权限。确定撤销吗？', { title: '撤销 Key', okText: '撤销', danger: true }))) return;
             localOpenAPIRevokeBtn.disabled = true;
             try {
                 var result = await CloudManager.revokeLocalOpenAPIKey();
@@ -2566,8 +2587,53 @@ document.addEventListener('DOMContentLoaded', function () {
     var accountName = document.getElementById('settings-account-name');
     var accountTier = document.getElementById('settings-account-tier');
     var accountAvatar = document.getElementById('settings-account-avatar');
+    var accountAvatarImage = document.getElementById('settings-account-avatar-image');
     var notLoggedIn = document.getElementById('cloud-not-logged-in');
     var loggedIn = document.getElementById('cloud-logged-in');
+    var pendingAvatarSrc = '';
+    var syncFrame = 0;
+
+    function clearAccountAvatar() {
+        pendingAvatarSrc = '';
+        if (!accountAvatar || !accountAvatarImage) return;
+        accountAvatar.classList.remove('has-image');
+        accountAvatarImage.hidden = true;
+        accountAvatarImage.removeAttribute('src');
+        accountAvatarImage.removeAttribute('data-source');
+    }
+
+    function setAccountAvatar(src) {
+        if (!accountAvatar || !accountAvatarImage || !src) {
+            clearAccountAvatar();
+            return;
+        }
+        if (accountAvatarImage.getAttribute('data-source') === src && accountAvatar.classList.contains('has-image')) {
+            return;
+        }
+        if (pendingAvatarSrc === src) return;
+        pendingAvatarSrc = src;
+        var preloader = new Image();
+        var commitAvatar = function () {
+            if (pendingAvatarSrc !== src) return;
+            accountAvatarImage.src = src;
+            accountAvatarImage.setAttribute('data-source', src);
+            accountAvatarImage.hidden = false;
+            accountAvatar.classList.add('has-image');
+            pendingAvatarSrc = '';
+        };
+        preloader.onload = function () {
+            if (typeof preloader.decode === 'function') {
+                preloader.decode().then(commitAvatar).catch(commitAvatar);
+            } else {
+                commitAvatar();
+            }
+        };
+        preloader.onerror = function () {
+            if (pendingAvatarSrc !== src) return;
+            clearAccountAvatar();
+        };
+        preloader.src = src;
+    }
 
     function syncAccountChip() {
         if (!accountChip || !notLoggedIn || !loggedIn) return;
@@ -2581,32 +2647,38 @@ document.addEventListener('DOMContentLoaded', function () {
             if (accountAvatar && avatarWrap) {
                 var img = avatarWrap.querySelector('img');
                 if (img && img.src) {
-                    accountAvatar.innerHTML = '';
-                    var chipImg = document.createElement('img');
-                    chipImg.src = img.src;
-                    chipImg.alt = '';
-                    accountAvatar.appendChild(chipImg);
-                    accountAvatar.classList.add('has-image');
+                    setAccountAvatar(img.src);
                 } else {
-                    accountAvatar.classList.remove('has-image');
+                    clearAccountAvatar();
                 }
             }
         } else {
             if (accountName) accountName.textContent = '未登录云服务';
             if (accountTier) accountTier.textContent = '点击登录老三账户';
-            if (accountAvatar) {
-                accountAvatar.classList.remove('has-image');
-                accountAvatar.innerHTML = '';
-            }
+            clearAccountAvatar();
         }
     }
-    if (notLoggedIn && window.MutationObserver) {
-        var observer = new MutationObserver(syncAccountChip);
+
+    function scheduleAccountChipSync() {
+        if (syncFrame) return;
+        syncFrame = window.requestAnimationFrame(function () {
+            syncFrame = 0;
+            syncAccountChip();
+        });
+    }
+
+    if (notLoggedIn && loggedIn && window.MutationObserver) {
+        var observer = new MutationObserver(scheduleAccountChipSync);
         observer.observe(notLoggedIn, { attributes: true, attributeFilter: ['style'] });
-        observer.observe(loggedIn, { attributes: true, attributeFilter: ['style'] });
+        observer.observe(loggedIn, {
+            attributes: true,
+            attributeFilter: ['style', 'src', 'class'],
+            childList: true,
+            characterData: true,
+            subtree: true
+        });
     }
     syncAccountChip();
-    window.setInterval(syncAccountChip, 2000);
 });
 </script>
 {% endblock %}

@@ -178,6 +178,7 @@
             </div>
         </div>
     </div>
+    <div id="batch-copy-modal" class="modal-overlay batch-copy-modal" style="display:none"><div class="modal-content batch-copy-dialog"><h3>复制布局并批量创建</h3><p id="batch-copy-source"></p><textarea id="batch-copy-names" rows="7" placeholder="每行一个班级名称"></textarea><div class="modal-actions"><button class="btn btn-secondary" type="button" data-close-batch>取消</button><button class="btn btn-primary" type="button" id="batch-copy-submit">创建班级</button></div></div></div>
 </div>
 {% endblock %}
 
@@ -191,6 +192,10 @@ document.addEventListener('DOMContentLoaded', function () {
     var createMenu = document.querySelector('[data-home-create-menu]');
     var syncAllButton = document.getElementById('home-sync-all-btn');
     var syncAllButtonLabel = syncAllButton ? syncAllButton.querySelector('span') : null;
+    var batchModal=document.getElementById('batch-copy-modal'), batchSource=0;
+    document.querySelectorAll('[data-home-classroom-card]').forEach(function(card){card.addEventListener('contextmenu',function(e){e.preventDefault(); batchSource=card.querySelector('a.home-enter-classroom').href.split('/').filter(Boolean).pop(); document.getElementById('batch-copy-source').textContent='布局来源：'+card.querySelector('h3').textContent; batchModal.style.display='flex'; document.getElementById('batch-copy-names').focus();});});
+    document.querySelector('[data-close-batch]').addEventListener('click',function(){batchModal.style.display='none';});
+    document.getElementById('batch-copy-submit').addEventListener('click',function(){var names=document.getElementById('batch-copy-names').value.trim(); if(!names)return; var fd=new FormData(); fd.append('source_classroom_id',batchSource); fd.append('names_text',names); fd.append('csrfmiddlewaretoken','{{ csrf_token }}'); fetch('{% url "batch_copy_classrooms" %}',{method:'POST',body:fd}).then(function(r){return r.json()}).then(function(x){batchModal.style.display='none'; location.reload();});});
 
     function normalize(value) {
         return String(value || '').trim().toLocaleLowerCase('zh-CN');
@@ -266,7 +271,14 @@ document.addEventListener('DOMContentLoaded', function () {
             var modal = document.getElementById('home-conflict-modal');
             var message = modal ? modal.querySelector('#home-conflict-message') : null;
             if (!modal || !message) {
-                resolve(window.confirm('检测到 ' + count + ' 项云同步冲突。确定：保留本地版本并覆盖云端；取消：使用云端版本覆盖本地。') ? 'local' : 'cloud');
+                if (typeof window.showChoiceModal === 'function') {
+                    window.showChoiceModal(
+                        '检测到 ' + count + ' 项本地与云端都有修改。选择"保留本地版本"会把本地数据覆盖到云端；选择"使用云端版本"会用云端数据覆盖本地，本地未同步的改动将丢失。',
+                        { title: '云同步冲突', primaryText: '保留本地版本', altText: '使用云端版本' }
+                    ).then(resolve);
+                } else {
+                    resolve(window.confirm('检测到 ' + count + ' 项云同步冲突。确定：保留本地版本并覆盖云端；取消：使用云端版本覆盖本地。') ? 'local' : 'cloud');
+                }
                 return;
             }
             message.textContent = '检测到 ' + count + ' 项本地与云端都有修改。选择"保留本地版本"会把本地数据覆盖到云端；选择"使用云端版本"会用云端数据覆盖本地，本地未同步的改动将丢失。';

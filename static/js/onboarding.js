@@ -58,6 +58,26 @@
         });
     }
 
+    function parseSeenResponse(res) {
+        if (!res || !res.ok) {
+            throw new Error('onboarding seen request failed: ' + (res ? res.status : 'no response'));
+        }
+        return res.json().catch(function () { return { ok: true }; });
+    }
+
+    function rememberSeenRetry(stage, classroomId) {
+        try {
+            sessionStorage.setItem(SEEN_RETRY_KEY, JSON.stringify({
+                stage: stage || '',
+                classroom_id: classroomId || ''
+            }));
+        } catch (e) {}
+    }
+
+    function clearSeenRetry() {
+        try { sessionStorage.removeItem(SEEN_RETRY_KEY); } catch (e) {}
+    }
+
     function markSeenOnServer(stage) {
         rememberSeenLocally();
         queueDataSharingPromptAfterOnboarding(stage);
@@ -76,25 +96,21 @@
                 window.location.href = homeUrl;
             }, 420);
         };
+        var classroomId = currentOnboardingClassroomPk();
         try {
-            postSeenRequest(stage, currentOnboardingClassroomPk())
-                .then(function (res) {
-                    return res && res.ok ? res.json().catch(function () { return null; }) : null;
-                })
+            postSeenRequest(stage, classroomId)
+                .then(parseSeenResponse)
                 .then(function (data) {
+                    clearSeenRetry();
                     navigateHome(data);
                 })
                 .catch(function () {
                     // 网络失败也要放用户走：先跳转，seen 请求留给下次页面加载重试。
-                    try {
-                        sessionStorage.setItem(SEEN_RETRY_KEY, JSON.stringify({
-                            stage: stage || '',
-                            classroom_id: currentOnboardingClassroomPk() || ''
-                        }));
-                    } catch (e) {}
+                    rememberSeenRetry(stage, classroomId);
                     navigateHome(null);
                 });
         } catch (e) {
+            rememberSeenRetry(stage, classroomId);
             navigateHome(null);
         }
     }
@@ -688,11 +704,21 @@
         var raw = '';
         try { raw = sessionStorage.getItem(SEEN_RETRY_KEY) || ''; } catch (e) { return; }
         if (!raw) return;
-        try { sessionStorage.removeItem(SEEN_RETRY_KEY); } catch (e) {}
         var payload = null;
         try { payload = JSON.parse(raw); } catch (e) {}
         if (!payload || !payload.stage) return;
-        postSeenRequest(payload.stage, payload.classroom_id).catch(function () {});
+        postSeenRequest(payload.stage, payload.classroom_id)
+            .then(parseSeenResponse)
+            .then(function (data) {
+                clearSeenRetry();
+                rememberSeenLocally();
+                if (isCompletionStage(payload.stage) && isIndexPage()) {
+                    window.location.replace((data && data.redirect_url) || '/');
+                }
+            })
+            .catch(function () {
+                // 保留重试记录；后续页面加载继续尝试，不能把失败当成成功。
+            });
     }
 
     if (document.readyState === 'loading') {

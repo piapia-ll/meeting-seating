@@ -1,10 +1,14 @@
 import os
+import sys
 from pathlib import Path
 
 from cloud.config import get_config
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = BASE_DIR.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 CONFIG = get_config()
 DB_NAME = os.getenv('CLOUD_SQLITE_PATH') or CONFIG.get('database', {}).get('name') or BASE_DIR / 'cloud.sqlite3'
 if isinstance(DB_NAME, str) and not os.path.isabs(DB_NAME):

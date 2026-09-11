@@ -1,0 +1,21 @@
+id: student_search_plugin
+name: 学生搜索插件
+version: 3.0.0
+api_version: 1
+requires:
+  app: ">=2.6,<3.0"
+entry: plugin.py
+description: 使用 Command、Form、Workspace Panel 与 Seat Overlay 搜索并定位学生
+author: 老三
+website: www.577622.xyz
+license: GPL-3.0
+trust_level: trusted
+permissions:
+  - plugin.runtime
+  - classroom.read
+  - students.read
+  - workspace.ui
+  - workspace.toolbar
+  - workspace.command_palette
+  - seat.overlay
+  - storage

@@ -8,5 +8,4 @@ class SeatsConfig(AppConfig):
         from .plugin_system import plugin_registry
         from . import sync_signals  # noqa: F401
 
-        plugin_registry.ensure_loaded()
-        plugin_registry.emit('app_ready')
+        plugin_registry.mark_app_ready()

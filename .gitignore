@@ -16,6 +16,8 @@ backend/cloud.sqlite3-journal
 backend/improve_data.sqlite3
 backend/improve_data.sqlite3-*
 backend/cloud_config.yaml
+# 服务端云控配置属于部署环境数据，保留本地文件但不纳入版本控制
+/backend/plugins/client_control/config.json
 *.encryption.lock
 media/
 staticfiles/

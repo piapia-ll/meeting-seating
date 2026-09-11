@@ -17,6 +17,7 @@ from django.db.backends.sqlite3.base import (
     FORMAT_QMARK_REGEX,
 )
 from django.db.backends.sqlite3.features import DatabaseFeatures as SQLiteDatabaseFeatures
+from django.db.backends.sqlite3.operations import DatabaseOperations as SQLiteDatabaseOperations
 from django.utils.asyncio import async_unsafe
 from django.utils.dateparse import parse_date, parse_datetime, parse_time
 from sqlcipher3 import dbapi2 as Database
@@ -61,9 +62,38 @@ class DatabaseFeatures(SQLiteDatabaseFeatures):
         return 999
 
 
+class DatabaseOperations(SQLiteDatabaseOperations):
+    """SQLite operations compatible with sqlcipher3's DB-API connection.
+
+    Django 6 asks the native sqlite3 connection for ``getlimit()`` while it
+    formats a query for debug logging.  sqlcipher3 does not expose that
+    CPython-only method, so use the same conservative batching limit as the
+    backend features above.
+    """
+
+    def _quote_params_for_last_executed_query(self, params):
+        connection = self.connection.connection
+        batch_size = min(self.connection.features.max_query_params, 999)
+
+        if len(params) > batch_size:
+            results = ()
+            for index in range(0, len(params), batch_size):
+                chunk = params[index : index + batch_size]
+                results += self._quote_params_for_last_executed_query(chunk)
+            return results
+
+        sql = "SELECT " + ", ".join(["QUOTE(?)"] * len(params))
+        cursor = connection.cursor()
+        try:
+            return cursor.execute(sql, params).fetchone()
+        finally:
+            cursor.close()
+
+
 class DatabaseWrapper(SQLiteDatabaseWrapper):
     Database = Database
     features_class = DatabaseFeatures
+    ops_class = DatabaseOperations
 
     def create_cursor(self, name=None):
         return self.connection.cursor(factory=SQLCipherCursorWrapper)

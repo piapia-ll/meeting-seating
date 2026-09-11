@@ -114,6 +114,10 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 
 
 PLUGIN_DIRS = plugin_directories()
+PLUGIN_MARKETPLACE_URL = os.getenv('PLUGIN_MARKETPLACE_URL', '').strip()
+PLUGIN_REQUIRE_TRUSTED_SIGNATURE = os.getenv(
+    'PLUGIN_REQUIRE_TRUSTED_SIGNATURE', '0'
+).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
 OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', '').strip()

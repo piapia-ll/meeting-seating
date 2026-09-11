@@ -15,7 +15,7 @@
 - 班级组批量创建、批量导入、原子云备份与订阅配额校验
 - 按姓名、学号、成绩和自定义信息进行自然数字、拼音及升降序排序
 - 多格式导出：Excel、SVG、PPTX、`.seats` 快照
-- 插件系统：Hook + Action + UI Script + Workspace Script 四种扩展方式
+- Plugin API v1：Manifest、Hook、Action、Command、Contribution、动态 UI、生命周期、权限与持久化
 - 桌面端原生体验：pywebview + EdgeChromium，支持 Windows 在线更新与 macOS 本地 PKG 保数据升级
 - 完整撤销/重做历史、Spotlight 命令面板、3D Toast 通知
 
@@ -88,11 +88,13 @@
 - 登录/注册阶段完成非对称密钥交换，后续同步、快照、订阅相关云请求统一采用端到端加密信封传输（RSA-OAEP + AES-GCM 混合加密）
 
 ### 插件系统
-- 基于 Python 文件的插件加载机制
-- 支持 hook（事件钩子）、action（动作）、UI script（脚本式 UI）、workspace script（工作区注入脚本）
-- 内置示例插件和学生搜索插件
-- 插件 UI 采用组件化渲染（metric、table、list、progress、badge 等）
-- 扩展系统支持 manifest、权限管理、运行时消息通信
+- 本地端与云端共用 `plugin_core`，运行时只保留本地 UI/Workspace 与云端 Route/Auth 差异
+- `plugin.yaml/plugin.json` 是正式协议，`PLUGIN_META` 作为旧版兼容格式
+- 支持 Plugin API 版本、应用版本约束、插件依赖、权限、trusted/sandboxed 信任等级
+- 支持 priority Hook、可取消/修改 Hook、Action、Command、Contribution、生命周期和热重载
+- PluginContext 提供命名空间 storage/settings/secrets/cache 与 classrooms/students/seats 服务
+- 动态 UI 包含展示、表单、Tabs、Alert、Button、Modal 等 19 种组件
+- 支持 DevTools、脚手架、ZIP 安装/更新、Ed25519 签名校验与 HTTPS 市场索引
 
 ### 桌面端能力
 - pywebview 原生窗口（Windows 使用 EdgeChromium 内核）
@@ -142,7 +144,8 @@
 ├── database_security.py       # Keychain/Credential Locker 密钥、明文库迁移与备份
 ├── desktop_shell.py           # 桌面桥接层（原生对话框、文件导入导出、Windows 右键菜单）
 ├── desktop_runtime.py         # 桌面运行时（版本管理、自动更新、Windows 提权）
-├── package.py                 # PyInstaller 打包脚本（清理数据库、环境变量脱敏）
+├── scripts/                   # 构建、发布与维护脚本
+├── plugin_core/               # 本地/云端共用 Plugin API v1 Core
 ├── config/                    # Django 配置
 │   ├── settings.py            # 全局设置（SQLCipher、插件目录、OpenAI 配置）
 │   ├── sqlcipher_backend/     # Django 6 SQLCipher 数据库适配层
@@ -155,8 +158,9 @@
 │   ├── urls.py                # 业务路由（120+ 条）
 │   ├── constraints.py         # 约束系统（校验、诊断、编译、冲突检测）
 │   ├── cloud.py               # 云同步客户端
-│   ├── plugin_system.py       # 插件注册中心（加载、沙箱、调度）
-│   ├── plugin_components.py   # 插件 UI 组件库（metric/table/list/progress/badge 等）
+│   ├── plugin_system.py       # 本地插件 Runtime
+│   ├── plugin_services.py     # PluginContext 班级/学生/座位服务
+│   ├── plugin_components.py   # 插件动态 UI 组件库
 │   ├── context_processors.py  # 模板上下文注入（运行时信息、Shell 类型）
 │   └── migrations/            # 11 个数据库迁移文件
 ├── templates/                 # 页面模板
@@ -185,13 +189,14 @@
 │   ├── favicon.svg            # 站点图标
 │   └── update.svg             # 更新图标
 ├── plugins/                   # 插件目录
-│   ├── example_plugin.py      # 示例插件（全组件演示）
-│   └── student_search_plugin.py # 学生搜索插件（浮层搜索 + 座位高亮）
+│   ├── example_plugin/        # Manifest + Plugin API v1 全组件示例
+│   └── student_search/        # Command + Workspace Slot + Seat Overlay 示例
 ├── fonts/                     # HarmonyOS Sans SC 字体（7 种字重）
 ├── runtime/                   # 运行时版本清单
 │   └── release.json           # 当前版本号
-├── doc/                       # 开发文档
-│   └── plugin-system.md       # 插件系统开发文档
+├── docs/                    # 对外接入文档
+│   ├── 前端接入指南.md       # Plugin API v1 前端接口与验收协议
+│   └── 三方接入指南.md       # 云端本机 OpenAPI 协议
 └── requirements.txt           # Python 依赖
 ```
 
@@ -318,7 +323,7 @@ macOS 不执行远程版本检查，也不会请求服务器下载升级包。�
 本地构建 macOS 首次安装 DMG 与升级 PKG：
 
 ```bash
-python package_macos.py 2.3.0
+python scripts/package_macos.py 2.3.0
 ```
 
 输出：
@@ -359,12 +364,19 @@ Open API/MCP 的 AI 类工具由 `OPEN_API_AI_TOOLS_ENABLED=True` 独立控制�
 插件系统支持以最小侵入方式扩展核心业务，无需修改主代码。
 
 ### 插件形式
-- 单文件插件：`plugins/xxx.py`
-- 包插件：`plugins/xxx/plugin.py` 或 `plugins/xxx/__init__.py`
+- 推荐：`plugins/xxx/plugin.yaml` + `plugins/xxx/plugin.py`
+- 兼容：`plugins/xxx.py` 或 `plugins/xxx/__init__.py` + `PLUGIN_META`
+- 声明式扩展：`trust_level: sandboxed`，只包含 Manifest 与 Contribution，不含 Python
 
 ### 最小示例
 
-在 `plugins/` 目录下创建 `.py` 文件，定义 `PLUGIN_META` 和 `register(registry)` 函数：
+先生成 Plugin API v1 脚手架：
+
+```bash
+python manage.py plugin scaffold my_plugin
+```
+
+插件入口使用 `PluginContext` 和统一注册 API：
 
 ```python
 PLUGIN_META = {
@@ -377,32 +389,37 @@ PLUGIN_META = {
 }
 
 def register(registry):
-    registry.register_hook('classroom_created', on_created)
+    registry.register_hook('classroom_created', on_created, priority=100)
     registry.register_action('my_action', handler, methods=('POST',))
+    registry.register_command('my.action', title='执行动作', action='my_action')
+    registry.contribute('workspace.toolbar', {
+        'id': 'my-action', 'label': '执行动作', 'command': 'my.action',
+    })
     registry.register_ui_script('dashboard', UI_SCRIPT)
-    registry.register_workspace_script('inject', JS_CODE, auto_run=True)
 ```
 
-### 四种注册类型
+### 主要注册类型
 
 | 类型 | API | 说明 |
 |------|-----|------|
-| Hook | `register_hook(event, handler)` | 事件钩子，监听系统动作（如 `classroom_created`） |
+| Hook | `register_hook(event, handler, priority, kind)` | 通知型或可干预事件钩子 |
 | Action | `register_action(action, handler, methods)` | HTTP 动作端点，可被外部调用 |
+| Command | `register_command(id, title, action/handler)` | 命令面板、工具栏、快捷键共用命令 |
+| Contribution | `contribute(slot, payload)` | 工具栏、面板、菜单、座位徽标/覆盖层 |
 | UI Script | `register_ui_script(ui_name, script)` | 脚本式 UI，Python 代码生成组件树（无需前端框架） |
-| Workspace Script | `register_workspace_script(name, script, auto_run)` | 工作区注入脚本，直接改造前端页面 |
+| Workspace Script | `register_workspace_script(name, script, auto_run)` | trusted 旧插件的 Raw JS 逃生通道 |
 
 ### UI 组件库
-插件 UI 采用组件化渲染，内置组件：metric、table、list、progress、badge、text、divider 等。
+插件 UI 支持 metric、table、list、progress、badge、text、divider、input、textarea、select、checkbox、radio、form、tabs、alert、button、modal 等组件。
 
 ### 扩展系统
-支持类 Chrome 扩展模式：manifest 声明、权限管理、`runtime.sendMessage` 通信。
+支持 Manifest、权限管理、`runtime.sendMessage`、生命周期、DevTools、热重载和插件包签名校验。
 
-详细文档参见 `doc/plugin-system.md`。
+前端接口与完整协议参见 `docs/前端接入指南.md`。
 
 ### 内置插件
-- `example_plugin.py` - 全组件演示插件
-- `student_search_plugin.py` - 学生搜索插件（浮层搜索 + 座位高亮，快捷键 `Ctrl+Shift+F`）
+- `plugins/example_plugin/` - Plugin API v1 全组件演示插件
+- `plugins/student_search/` - 声明式搜索面板、Command 与 Seat Overlay 示例
 
 ---
 

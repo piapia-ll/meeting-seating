@@ -269,31 +269,31 @@ def _remove_project_backend_payload(dist_root):
 def main():
     _ensure_utf8_stdio()
 
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
     if not sys.prefix or sys.prefix == sys.base_prefix:
         print("警告: 似乎未在虚拟环境中运行。建议在虚拟环境中使用此脚本。", flush=True)
-    
+
     DIST_DIR = os.path.join(BASE_DIR, 'dist')
     BUILD_DIR = os.path.join(BASE_DIR, 'build')
     SPEC_FILE = os.path.join(BASE_DIR, 'FuckSeats.spec')
     STAGE_DIR = os.path.join(BASE_DIR, '_data_stage')
     DATA_DIRS = ['templates', 'static', 'seats', 'runtime', 'config', 'plugins', 'skill']
     DB_EXCLUDE_PATTERNS = ['*.sqlite3', '*.sqlite', '*.db']
-    
+
     print("正在清理旧构建文件...", flush=True)
     if os.path.exists(DIST_DIR):
         try:
             shutil.rmtree(DIST_DIR)
         except Exception as e:
             print(f"清理 dist 目录失败: {e}", flush=True)
-            
+
     if os.path.exists(BUILD_DIR):
         try:
             shutil.rmtree(BUILD_DIR)
         except Exception as e:
             print(f"清理 build 目录失败: {e}", flush=True)
-            
+
     if os.path.exists(SPEC_FILE):
         try:
             os.remove(SPEC_FILE)
@@ -301,7 +301,7 @@ def main():
             print(f"清理 spec 文件失败: {e}", flush=True)
 
     print("开始打包程序...", flush=True)
-    
+
     print("Preparing data files (excluding database files)...", flush=True)
     if os.path.exists(STAGE_DIR):
         try:
@@ -332,9 +332,9 @@ def main():
             data_args += ['--add-data', f'{staged_dir}{os.pathsep}{data_dir}']
 
     cmd = _build_pyinstaller_command(data_args)
-    
+
     print(f"执行命令: {' '.join(cmd)}", flush=True)
-    
+
     try:
         subprocess.check_call(cmd, cwd=BASE_DIR)
         removed_unwanted_dirs = _remove_project_backend_payload(DIST_DIR)

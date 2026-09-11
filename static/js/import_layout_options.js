@@ -279,10 +279,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (confirmBtn) {
-        confirmBtn.addEventListener('click', () => {
+        confirmBtn.addEventListener('click', async () => {
             const replaceStudents = document.getElementById('seat-layout-replace-students')?.checked;
-            if (replaceStudents && !window.confirm('已勾选“导入前清空现有学生”，导入后现有学生及其约束将被删除。确定继续吗？')) {
-                return;
+            if (replaceStudents) {
+                const confirmed = window.showConfirmModal
+                    ? await window.showConfirmModal('已勾选“导入前清空现有学生”，导入后现有学生及其约束将被删除。确定继续吗？', { title: '清空并导入', okText: '继续导入', danger: true })
+                    : window.confirm('已勾选“导入前清空现有学生”，导入后现有学生及其约束将被删除。确定继续吗？');
+                if (!confirmed) return;
             }
             const originalText = confirmBtn.textContent;
             confirmBtn.textContent = '导入中...';

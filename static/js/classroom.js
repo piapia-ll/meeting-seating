@@ -891,59 +891,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const _dialogModal = document.getElementById('generic-dialog-modal');
-    const _dialogTitle = document.getElementById('genericDialogTitle');
-    const _dialogMessage = document.getElementById('genericDialogMessage');
-    const _dialogInput = document.getElementById('genericDialogInput');
-    const _dialogOk = document.getElementById('genericDialogOk');
-    const _dialogCancel = document.getElementById('genericDialogCancel');
-    let _dialogResolve = null;
-
-    const _cleanupDialog = () => {
-        _dialogOk.replaceWith(_dialogOk.cloneNode(true));
-        _dialogCancel.replaceWith(_dialogCancel.cloneNode(true));
-        // 输入框一并克隆重建，清掉旧弹窗遗留的 keydown 监听。
-        _dialogInput.replaceWith(_dialogInput.cloneNode(true));
-        const ok = document.getElementById('genericDialogOk');
-        const cancel = document.getElementById('genericDialogCancel');
-        return { ok, cancel, input: document.getElementById('genericDialogInput') };
-    };
-
-    const showConfirmModal = (message, { title = '确认操作', okText = '确定', cancelText = '取消' } = {}) => {
-        return new Promise((resolve) => {
-            _dialogTitle.textContent = title;
-            _dialogMessage.textContent = message;
-            const { ok, cancel, input } = _cleanupDialog();
-            input.style.display = 'none';
-            ok.textContent = okText;
-            cancel.textContent = cancelText;
-            _dialogResolve = resolve;
-            ok.addEventListener('click', () => { closeModal('generic-dialog-modal'); resolve(true); });
-            cancel.addEventListener('click', () => { closeModal('generic-dialog-modal'); resolve(false); });
-            openModal('generic-dialog-modal');
-        });
-    };
-
-    const showPromptModal = (message, { title = '请输入', defaultValue = '', okText = '确定', cancelText = '取消' } = {}) => {
-        return new Promise((resolve) => {
-            _dialogTitle.textContent = title;
-            _dialogMessage.textContent = message;
-            const { ok, cancel, input } = _cleanupDialog();
-            input.style.display = '';
-            input.value = defaultValue;
-            ok.textContent = okText;
-            cancel.textContent = cancelText;
-            _dialogResolve = resolve;
-            const submit = () => { closeModal('generic-dialog-modal'); resolve(input.value); };
-            ok.addEventListener('click', submit);
-            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
-            cancel.addEventListener('click', () => { closeModal('generic-dialog-modal'); resolve(null); });
-            openModal('generic-dialog-modal');
-            requestAnimationFrame(() => { input.focus(); input.select(); });
-        });
-    };
-    window.showConfirmModal = showConfirmModal;
-    window.showPromptModal = showPromptModal;
+    // 确认/输入弹窗已抽为全局模块 dialog.js（自包含 DOM，随 base.html 全站加载）。
+    // 这里直接复用全局实现，避免重复定义。
+    const showConfirmModal = window.showConfirmModal;
+    const showPromptModal = window.showPromptModal;
 
     const _sfModal = document.getElementById('student-form-modal');
     const _sfTitle = document.getElementById('studentFormTitle');
@@ -1513,11 +1464,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const createPluginChip = (label, className, dataset) => {
+    const pluginChipIcons = {
+        ui: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18" stroke="currentColor" stroke-width="1.8"/><circle cx="6" cy="6.5" r="0.6" fill="currentColor"/><circle cx="8.7" cy="6.5" r="0.6" fill="currentColor"/></svg>',
+        action: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+        workspace: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.9 4.6L19 8.2l-3.6 3.3.9 5-4.3-2.6-4.3 2.6.9-5L5 8.2l5.1-.6L12 3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+        manifest: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 3v5h5" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+        grant: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9-4-0.8-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        json: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M8 4H6a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2M16 4h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
+    };
+
+    const createPluginChip = (label, className, dataset, iconName) => {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = `plugin-hub-chip-btn ${className || ''}`.trim();
-        btn.textContent = label;
+        const icon = iconName && pluginChipIcons[iconName]
+            ? `<span class="plugin-chip-icon" aria-hidden="true">${pluginChipIcons[iconName]}</span>`
+            : '';
+        btn.innerHTML = `${icon}<span class="plugin-chip-label">${escapeHtml(label)}</span>`;
         Object.keys(dataset || {}).forEach((key) => {
             btn.dataset[key] = dataset[key];
         });
@@ -1618,17 +1581,28 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const kindLabel = {
+            uiOpen: '界面', uiJson: '数据', action: '动作',
+            workspaceApply: '增强', manifest: 'Manifest'
+        };
+        const kindIcon = {
+            uiOpen: 'ui', uiJson: 'json', action: 'action',
+            workspaceApply: 'workspace', manifest: 'manifest'
+        };
         rows.forEach((cmd) => {
             const row = document.createElement('button');
             row.type = 'button';
             row.className = 'plugin-command-item';
             row.dataset.commandId = cmd.id;
+            const kLabel = kindLabel[cmd.kind] || cmd.kind;
+            const kIcon = pluginChipIcons[kindIcon[cmd.kind] || 'manifest'] || '';
             row.innerHTML = `
+                <div class="plugin-command-item-icon" aria-hidden="true">${kIcon}</div>
                 <div class="plugin-command-item-main">
                     <div class="plugin-command-item-title">${escapeHtml(cmd.title)}</div>
                     <div class="plugin-command-item-desc">${escapeHtml(cmd.description)}</div>
                 </div>
-                <span class="plugin-command-item-kind">${escapeHtml(cmd.kind)}</span>
+                <span class="plugin-command-item-kind kind-${escapeAttr(cmd.kind)}">${escapeHtml(kLabel)}</span>
             `;
             pluginCommandList.appendChild(row);
         });
@@ -1649,31 +1623,38 @@ document.addEventListener('DOMContentLoaded', () => {
             let commandId = '';
             let label = ext.name || ext.id;
             let primary = true;
+            let icon = 'manifest';
 
             if (firstUi && firstUi.name) {
                 commandId = `${ext.id}:ui-open:${firstUi.name}`;
-                label = `${ext.name || ext.id} · UI`;
+                label = `${ext.name || ext.id}`;
+                icon = 'ui';
             } else if (firstAction && firstAction.name) {
                 commandId = `${ext.id}:action:${firstAction.name}`;
-                label = `${ext.name || ext.id} · 运行`;
+                label = `${ext.name || ext.id}`;
                 primary = false;
+                icon = 'action';
             } else if ((ext.workspace_scripts || []).length) {
                 commandId = `${ext.id}:workspace:${ext.workspace_scripts[0].name}`;
-                label = `${ext.name || ext.id} · 增强`;
+                label = `${ext.name || ext.id}`;
                 primary = false;
+                icon = 'workspace';
             }
 
             if (!commandId) {
                 commandId = `${ext.id}:manifest`;
-                label = `${ext.name || ext.id} · Manifest`;
+                label = `${ext.name || ext.id}`;
                 primary = false;
+                icon = 'manifest';
             }
 
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = `plugin-quick-launch-btn ${primary ? 'primary' : ''}`.trim();
             btn.dataset.commandId = commandId;
-            btn.textContent = label;
+            btn.title = `${ext.name || ext.id}（${icon === 'ui' ? '界面' : icon === 'action' ? '动作' : icon === 'workspace' ? '增强' : 'Manifest'}）`;
+            const iconSvg = pluginChipIcons[icon] || pluginChipIcons.manifest;
+            btn.innerHTML = `<span class="plugin-chip-icon" aria-hidden="true">${iconSvg}</span><span class="plugin-chip-label">${escapeHtml(label)}</span>`;
             pluginQuickLaunch.appendChild(btn);
         });
     };
@@ -1982,26 +1963,58 @@ document.addEventListener('DOMContentLoaded', () => {
         cachedExtensions.forEach((ext) => {
             const card = document.createElement('article');
             card.className = 'plugin-hub-card';
+            if (ext.enabled === false) card.classList.add('is-disabled');
+
+            const uiCount = (ext.ui_scripts || []).length;
+            const actionCount = (ext.actions || []).length;
+            const wsCount = (ext.workspace_scripts || []).length;
+            const isSandboxed = String(ext.trust_level || '') === 'sandboxed';
 
             const head = document.createElement('div');
             head.className = 'plugin-hub-card-head';
             head.innerHTML = `
-                <div class="plugin-hub-card-title">${ext.name || ext.id}</div>
-                <div class="plugin-hub-card-version">v${ext.version || '0.0.1'}</div>
+                <div class="plugin-hub-card-headtext">
+                    <div class="plugin-hub-card-title">${escapeHtml(ext.name || ext.id)}</div>
+                    <div class="plugin-hub-card-subtitle">${escapeHtml(ext.id)}</div>
+                </div>
+                <div class="plugin-hub-card-version">v${escapeHtml(ext.version || '0.0.1')}</div>
             `;
             card.appendChild(head);
+
+            const meta = document.createElement('div');
+            meta.className = 'plugin-hub-card-meta';
+            const statusChip = ext.enabled === false
+                ? '<span class="plugin-status-chip off">已禁用</span>'
+                : '<span class="plugin-status-chip on">已启用</span>';
+            const trustChip = isSandboxed
+                ? '<span class="plugin-status-chip sandboxed">声明式扩展</span>'
+                : '<span class="plugin-status-chip trusted">主进程插件</span>';
+            meta.innerHTML = statusChip + trustChip;
+            if (uiCount + actionCount + wsCount > 0) {
+                meta.innerHTML += `<span class="plugin-status-chip neutral">` +
+                    [uiCount ? `UI ${uiCount}` : '', actionCount ? `动作 ${actionCount}` : '', wsCount ? `增强 ${wsCount}` : '']
+                        .filter(Boolean).join(' · ') + `</span>`;
+            }
+            card.appendChild(meta);
 
             const desc = document.createElement('div');
             desc.className = 'plugin-hub-card-desc';
             desc.textContent = ext.description || '无描述';
             card.appendChild(desc);
 
+            if (ext.last_error) {
+                const errBox = document.createElement('div');
+                errBox.className = 'plugin-hub-card-error';
+                errBox.textContent = String(ext.last_error);
+                card.appendChild(errBox);
+            }
+
             if (isDevMode) {
                 const basicRow = document.createElement('div');
                 basicRow.className = 'plugin-hub-card-row';
                 basicRow.appendChild(createPluginChip('查看 Manifest', '', {
                     commandId: `${ext.id}:manifest`,
-                }));
+                }, 'manifest'));
                 card.appendChild(basicRow);
             }
 
@@ -2012,12 +2025,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     uiRow.appendChild(createPluginChip(
                         isDevMode ? `打开 UI: ${ui.name}` : `打开 ${ui.name}`,
                         'primary',
-                        { commandId: `${ext.id}:ui-open:${ui.name}` }
+                        { commandId: `${ext.id}:ui-open:${ui.name}` },
+                        'ui'
                     ));
                     if (isDevMode) {
                         uiRow.appendChild(createPluginChip(`取 UI JSON: ${ui.name}`, '', {
                             commandId: `${ext.id}:ui-json:${ui.name}`,
-                        }));
+                        }, 'json'));
                     }
                 });
                 card.appendChild(uiRow);
@@ -2030,7 +2044,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionRow.appendChild(createPluginChip(
                         isDevMode ? `执行 ${action.name}` : action.name,
                         isDevMode ? '' : 'primary',
-                        { commandId: `${ext.id}:action:${action.name}` }
+                        { commandId: `${ext.id}:action:${action.name}` },
+                        'action'
                     ));
                 });
                 card.appendChild(actionRow);
@@ -2048,7 +2063,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     {
                         grantPluginId: ext.id,
                         grantValue: ext.workspace_permission_granted ? '0' : '1',
-                    }
+                    },
+                    'grant'
                 );
                 workspaceRow.appendChild(allowBtn);
 
@@ -2056,7 +2072,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ext.workspace_scripts.forEach((script) => {
                         workspaceRow.appendChild(createPluginChip(`应用增强: ${script.name}`, '', {
                             commandId: `${ext.id}:workspace:${script.name}`,
-                        }));
+                        }, 'workspace'));
                     });
                 }
 
@@ -3490,7 +3506,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const updateSeatElement = (seat, data) => {
         if (!seat || !data) return;
         // 增量更新：学生与格子类型都没变的座位直接跳过，不再无差别重建 DOM。
-        const nextKey = `${data.student ? data.student.id : ''}:${data.student && data.student.score_display ? `${data.student.score_display}分` : ''}:${data.student && data.student.is_leader ? 1 : 0}:${data.student && data.student.is_fixed_seat ? 1 : 0}`;
+        // 小组信息必须纳入 key：否则“应用到选中”改了座位小组后，学生没变、
+        // key 相同直接跳过重建，座位上的小组标签永远不会渲染出来。
+        const nextKey = `${data.student ? data.student.id : ''}:${data.student && data.student.score_display ? `${data.student.score_display}分` : ''}:${data.student && data.student.is_leader ? 1 : 0}:${data.student && data.student.is_fixed_seat ? 1 : 0}:${data.group ? `${data.group.id}:${data.group.name}` : ''}`;
         if (seat.dataset.cellType === data.cell_type && (seat.dataset.studentKey || '') === nextKey) {
             return false;
         }
@@ -4182,8 +4200,15 @@ document.addEventListener('DOMContentLoaded', () => {
             handleResponse(postJson(urls.groupAssignBatch, {
                 group_id: groupId || null,
                 seats: seatsPayload
-            }), () => {
+            }), null, () => {
+                // 座位区已带着新的小组标签重渲染完，再清选区并提示，
+                // 避免“成功了但页面毫无反应”的观感。
                 clearMultiSelection();
+                const groupName = (groupSelect && groupId && groupSelect.selectedIndex >= 0
+                    ? groupSelect.options[groupSelect.selectedIndex].textContent : '') || '';
+                showInlineToast(groupId
+                    ? `已将 ${seatsPayload.length} 个座位归入${groupName ? `「${groupName}」` : '小组'}`
+                    : `已取消 ${seatsPayload.length} 个座位的小组归属`);
             });
         });
     }
@@ -4669,30 +4694,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    const openModal = (modalId) => {
-        if (!modalId) return;
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
-        modal.style.display = 'flex';
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                modal.classList.add('modal-visible');
-            });
-        });
-    };
-
-    const closeModal = (modalId) => {
-        if (!modalId) return;
-        const modal = document.getElementById(modalId);
-        if (!modal) return;
-        modal.classList.remove('modal-visible');
-        const onEnd = (e) => {
-            if (e.target !== modal.querySelector('.modal-content')) return;
-            modal.style.display = 'none';
-            modal.removeEventListener('transitionend', onEnd);
-        };
-        modal.addEventListener('transitionend', onEnd);
-    };
+    // openModal/closeModal 已由全局 dialog.js 提供，这里直接引用，避免重复实现。
+    const openModal = window.openModal;
+    const closeModal = window.closeModal;
 
     document.querySelectorAll('[data-open-modal]').forEach((btn) => {
         btn.addEventListener('click', () => {

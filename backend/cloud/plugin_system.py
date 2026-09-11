@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import importlib.util
-import inspect
+import hmac
 import json
 import logging
 import os
-import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -16,44 +14,32 @@ from django.urls import path
 from django.urls.resolvers import URLPattern, URLResolver
 from django.views.decorators.http import require_http_methods
 
-try:
-    import yaml
-except Exception:
-    yaml = None
+from plugin_core import (
+    BasePluginRegistry,
+    DjangoModelStorageBackend,
+    PluginActionNotFoundError,
+    PluginDisabledError,
+    PluginMethodNotAllowedError,
+    PluginNotFoundError,
+)
+from plugin_core.actions import ExecutionStats, normalize_methods
+from plugin_core.manifest import discover_plugin_candidates
 
 from .config import get_config
+from .plugin_services import cloud_plugin_service_factories
 
 
 LOGGER = logging.getLogger(__name__)
 
 
-class BackendPluginError(Exception):
+class BackendPluginAuthenticationError(Exception):
     pass
 
 
-class BackendPluginNotFoundError(BackendPluginError):
-    pass
-
-
-class BackendPluginActionNotFoundError(BackendPluginError):
-    pass
-
-
-class BackendPluginMethodNotAllowedError(BackendPluginError):
-    pass
-
-
-class BackendPluginAuthenticationError(BackendPluginError):
-    pass
-
-
-@dataclass
-class BackendPluginAction:
-    name: str
-    handler: Callable[..., Any]
-    methods: tuple[str, ...] = ('POST',)
-    description: str = ''
-    auth_required: bool = False
+BackendPluginError = Exception
+BackendPluginNotFoundError = PluginNotFoundError
+BackendPluginActionNotFoundError = PluginActionNotFoundError
+BackendPluginMethodNotAllowedError = PluginMethodNotAllowedError
 
 
 @dataclass
@@ -63,32 +49,9 @@ class BackendPluginRoute:
     methods: tuple[str, ...] = ('GET',)
     name: str = ''
     description: str = ''
+    permissions: tuple[str, ...] = ()
     auth_required: bool = False
-
-
-@dataclass
-class BackendPluginRecord:
-    plugin_id: str
-    name: str
-    version: str
-    description: str = ''
-    author: str = ''
-    website: str = ''
-    module_name: str = ''
-    path: str = ''
-    manifest: dict[str, Any] = field(default_factory=dict)
-    hooks: dict[str, int] = field(default_factory=dict)
-    actions: dict[str, BackendPluginAction] = field(default_factory=dict)
-    routes: dict[str, BackendPluginRoute] = field(default_factory=dict)
-    url_patterns: list[Any] = field(default_factory=list)
-    state: dict[str, Any] = field(default_factory=dict)
-
-
-def _normalize_methods(methods, default=('POST',)):
-    if isinstance(methods, str):
-        methods = [methods]
-    rows = tuple(sorted({str(item).strip().upper() for item in (methods or []) if str(item).strip()}))
-    return rows or tuple(default)
+    stats: ExecutionStats = field(default_factory=ExecutionStats)
 
 
 def _json_error(message, status=400, **extra):
@@ -99,9 +62,12 @@ def _json_error(message, status=400, **extra):
 
 def _json_body(request):
     try:
-        return json.loads((request.body or b'{}').decode('utf-8') or '{}')
+        value = json.loads((request.body or b'{}').decode('utf-8') or '{}')
     except Exception as exc:
         raise ValueError('请求数据格式错误') from exc
+    if not isinstance(value, dict):
+        raise ValueError('请求数据必须是 JSON 对象')
+    return value
 
 
 def _normalize_response(value):
@@ -124,7 +90,6 @@ def _session_context(request, auth_required):
         return {}
     if request is None:
         raise BackendPluginAuthenticationError('此插件能力需要登录态')
-
     from .auth import get_request_session
 
     session = get_request_session(request)
@@ -151,74 +116,29 @@ def _split_env_paths(value):
 def _resolve_plugin_dirs(base_dir=None):
     base = Path(base_dir or getattr(settings, 'BASE_DIR', Path(__file__).resolve().parent.parent)).resolve()
     configured = []
-
     django_dirs = getattr(settings, 'CLOUD_PLUGIN_DIRS', None)
     if django_dirs:
         configured.extend(django_dirs)
-
     config_dirs = _plugin_config().get('dirs') or []
     if isinstance(config_dirs, str):
         config_dirs = [config_dirs]
     configured.extend(config_dirs)
-
     configured.extend(_split_env_paths(os.getenv('CLOUD_PLUGIN_DIRS')))
     if not configured:
         configured = [base / 'plugins']
-
-    result = []
+    rows = []
     for raw_path in configured:
-        path = Path(raw_path).expanduser()
-        if not path.is_absolute():
-            path = base / path
-        result.append(path.resolve())
-    return result
-
-
-def _load_manifest(manifest_path: Path):
-    if not manifest_path.exists() or not manifest_path.is_file():
-        return {}
-    try:
-        if manifest_path.suffix.lower() == '.json':
-            return json.loads(manifest_path.read_text(encoding='utf-8')) or {}
-        if manifest_path.suffix.lower() in {'.yaml', '.yml'} and yaml is not None:
-            return yaml.safe_load(manifest_path.read_text(encoding='utf-8')) or {}
-    except Exception:
-        LOGGER.exception('读取后端插件 manifest 失败: %s', manifest_path)
-    return {}
-
-
-def _discover_candidates(base_dir=None):
-    candidates = []
-    for plugin_dir in _resolve_plugin_dirs(base_dir):
-        if not plugin_dir.exists() or not plugin_dir.is_dir():
-            continue
-        for child in sorted(plugin_dir.iterdir(), key=lambda item: item.name):
-            if child.name.startswith('_'):
-                continue
-            if child.is_file() and child.suffix == '.py' and child.name != '__init__.py':
-                candidates.append((child, {}))
-                continue
-            if not child.is_dir():
-                continue
-
-            manifest = {}
-            for manifest_name in ('plugin.yaml', 'plugin.yml', 'plugin.json'):
-                manifest = _load_manifest(child / manifest_name)
-                if manifest:
-                    break
-
-            entry = child / str(manifest.get('entry') or 'plugin.py')
-            if not entry.exists():
-                entry = child / '__init__.py'
-            if entry.exists():
-                candidates.append((entry, manifest))
-    return candidates
+        value = Path(raw_path).expanduser()
+        if not value.is_absolute():
+            value = base / value
+        rows.append(value.resolve())
+    return rows
 
 
 def _manifest_list_value(manifest, key):
     value = manifest.get(key)
     if value is None:
-        value = manifest.get('django', {}).get(key)
+        value = (manifest.get('django') or {}).get(key)
     if not value:
         return []
     if isinstance(value, str):
@@ -228,190 +148,66 @@ def _manifest_list_value(manifest, key):
 
 def get_plugin_installed_apps(base_dir=None):
     apps = []
-    for _, manifest in _discover_candidates(base_dir):
-        apps.extend(_manifest_list_value(manifest, 'installed_apps'))
+    for candidate in discover_plugin_candidates(_resolve_plugin_dirs(base_dir)):
+        apps.extend(_manifest_list_value(candidate.manifest_data, 'installed_apps'))
     return apps
 
 
 def get_plugin_middleware(base_dir=None):
     middleware = []
-    for _, manifest in _discover_candidates(base_dir):
-        middleware.extend(_manifest_list_value(manifest, 'middleware'))
+    for candidate in discover_plugin_candidates(_resolve_plugin_dirs(base_dir)):
+        middleware.extend(_manifest_list_value(candidate.manifest_data, 'middleware'))
     return middleware
 
 
-class BackendPluginRegistry:
+def _cloud_app_version():
+    env_value = str(os.getenv('FUCKSEATS_APP_VERSION') or os.getenv('CLOUD_APP_VERSION') or '').strip()
+    if env_value:
+        return env_value
+    manifest_path = Path(__file__).resolve().parents[2] / 'runtime' / 'release.json'
+    try:
+        return str(json.loads(manifest_path.read_text(encoding='utf-8')).get('version') or '0.0.0')
+    except Exception:
+        return '0.0.0'
+
+
+def _plugin_storage_model():
+    from .models import PluginRuntimeKV
+
+    return PluginRuntimeKV
+
+
+def _plugin_storage_secret():
+    return str(getattr(settings, 'SECRET_KEY', 'fuckseats-cloud-plugin-storage'))
+
+
+class BackendPluginRegistry(BasePluginRegistry):
+    runtime_name = 'cloud'
+
     def __init__(self):
-        self._lock = threading.RLock()
-        self._loaded = False
-        self._current_plugin_id = None
-        self._plugins: dict[str, BackendPluginRecord] = {}
-        self._hooks: dict[str, list[tuple[str, Callable[..., Any]]]] = {}
-        self._routes_loaded = False
-        self._load_errors: list[dict[str, str]] = []
-
-    @property
-    def load_errors(self):
-        return list(self._load_errors)
-
-    def reset_for_tests(self):
-        with self._lock:
-            self._loaded = False
-            self._current_plugin_id = None
-            self._plugins = {}
-            self._hooks = {}
-            self._routes_loaded = False
-            self._load_errors = []
-
-    def _module_name_from_path(self, file_path: Path):
-        safe_name = file_path.stem.replace('-', '_').replace('.', '_')
-        return f'cloud_backend_plugins.{safe_name}_{abs(hash(str(file_path)))}'
-
-    def _invoke_callable(self, func: Callable[..., Any], context: dict[str, Any]):
-        signature = inspect.signature(func)
-        if not signature.parameters:
-            return func()
-        if len(signature.parameters) == 1:
-            return func(context)
-        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in signature.parameters.values()):
-            return func(**context)
-        accepted = {
-            key: value
-            for key, value in context.items()
-            if key in signature.parameters
-        }
-        return func(**accepted)
-
-    def _register_plugin_record(self, plugin_id, meta, module_name, file_path, manifest):
-        if plugin_id in self._plugins:
-            raise ValueError(f'后端插件 ID 冲突：{plugin_id}')
-        self._plugins[plugin_id] = BackendPluginRecord(
-            plugin_id=plugin_id,
-            name=str(meta.get('name') or plugin_id),
-            version=str(meta.get('version') or '0.0.1'),
-            description=str(meta.get('description') or ''),
-            author=str(meta.get('author') or ''),
-            website=str(meta.get('website') or ''),
-            module_name=module_name,
-            path=str(file_path),
-            manifest=dict(manifest or {}),
+        super().__init__(
+            app_version=_cloud_app_version(),
+            storage_backend=DjangoModelStorageBackend(_plugin_storage_model, _plugin_storage_secret),
+            services=cloud_plugin_service_factories(),
         )
 
-    def ensure_loaded(self):
-        with self._lock:
-            if self._loaded:
-                return
-            self._loaded = True
+    def resolve_plugin_dirs(self):
+        return _resolve_plugin_dirs()
 
-            for file_path, manifest in _discover_candidates():
-                try:
-                    module_name = self._module_name_from_path(file_path)
-                    spec = importlib.util.spec_from_file_location(module_name, file_path)
-                    if spec is None or spec.loader is None:
-                        raise RuntimeError('无法创建模块加载器')
-
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-
-                    module_meta = getattr(module, 'PLUGIN_META', {}) or {}
-                    if not isinstance(module_meta, dict):
-                        raise ValueError('PLUGIN_META 必须是 dict')
-                    meta = {**(manifest or {}), **module_meta}
-
-                    fallback_id = file_path.parent.name if file_path.name in {'plugin.py', '__init__.py'} else file_path.stem
-                    plugin_id = str(meta.get('id') or fallback_id).strip()
-                    if not plugin_id:
-                        raise ValueError('插件 ID 不能为空')
-
-                    self._register_plugin_record(plugin_id, meta, module_name, file_path, manifest)
-
-                    register_fn = getattr(module, 'register', None)
-                    if callable(register_fn):
-                        self._current_plugin_id = plugin_id
-                        try:
-                            register_fn(self)
-                        finally:
-                            self._current_plugin_id = None
-
-                    module_urlpatterns = getattr(module, 'urlpatterns', None)
-                    if module_urlpatterns:
-                        self.register_urlpatterns(module_urlpatterns, plugin_id=plugin_id)
-
-                    self.emit('plugin_loaded', plugin_id=plugin_id, plugin=self._plugins[plugin_id])
-                except Exception as exc:
-                    self._load_errors.append({'path': str(file_path), 'error': str(exc)})
-                    LOGGER.exception('加载后端插件失败: %s', file_path)
-
-    def _current_record(self, plugin_id=None):
-        pid = plugin_id or self._current_plugin_id
-        if not pid:
-            raise ValueError('需要 plugin_id 或在 register() 内部调用')
-        if pid not in self._plugins:
-            raise BackendPluginNotFoundError(f'后端插件不存在：{pid}')
-        return self._plugins[pid]
-
-    def get_state(self, plugin_id: str | None = None):
+    def get_state(self, plugin_id=None):
         return self._current_record(plugin_id).state
-
-    def register_hook(self, event: str, handler: Callable[..., Any], plugin_id: str | None = None):
-        record = self._current_record(plugin_id)
-        if not callable(handler):
-            raise ValueError('hook handler 必须是可调用对象')
-        event_name = str(event or '').strip()
-        if not event_name:
-            raise ValueError('hook event 不能为空')
-
-        self._hooks.setdefault(event_name, []).append((record.plugin_id, handler))
-        record.hooks[event_name] = record.hooks.get(event_name, 0) + 1
-
-    def hook(self, event: str):
-        def decorator(func):
-            self.register_hook(event, func)
-            return func
-        return decorator
-
-    def register_action(
-        self,
-        action: str,
-        handler: Callable[..., Any],
-        *,
-        methods=('POST',),
-        description: str = '',
-        auth_required: bool = False,
-        plugin_id: str | None = None,
-    ):
-        record = self._current_record(plugin_id)
-        if not callable(handler):
-            raise ValueError('action handler 必须是可调用对象')
-        action_name = str(action or '').strip()
-        if not action_name:
-            raise ValueError('action 名称不能为空')
-        if action_name in record.actions:
-            raise ValueError(f'重复 action：{action_name}')
-        record.actions[action_name] = BackendPluginAction(
-            name=action_name,
-            handler=handler,
-            methods=_normalize_methods(methods, default=('POST',)),
-            description=str(description or ''),
-            auth_required=bool(auth_required),
-        )
-
-    def action(self, name: str, **options):
-        def decorator(func):
-            self.register_action(name, func, **options)
-            return func
-        return decorator
 
     def register_route(
         self,
-        route: str,
-        handler: Callable[..., Any],
+        route,
+        handler,
         *,
         methods=('GET',),
-        name: str = '',
-        description: str = '',
-        auth_required: bool = False,
-        plugin_id: str | None = None,
+        name='',
+        description='',
+        permissions=(),
+        auth_required=False,
+        plugin_id=None,
     ):
         record = self._current_record(plugin_id)
         if not callable(handler):
@@ -421,144 +217,117 @@ class BackendPluginRegistry:
             raise ValueError('route 不能为空')
         if route_key in record.routes:
             raise ValueError(f'重复 route：{route_key}')
+        permission_rows = tuple(str(item) for item in (permissions or ()) if str(item).strip())
+        for capability in permission_rows:
+            self.require_permission(record.plugin_id, capability)
         record.routes[route_key] = BackendPluginRoute(
             route=route_key,
             handler=handler,
-            methods=_normalize_methods(methods, default=('GET',)),
+            methods=normalize_methods(methods, default=('GET',)),
             name=str(name or route_key.replace('/', '_').replace('-', '_').replace('<', '').replace('>', '').replace(':', '_')),
             description=str(description or ''),
+            permissions=permission_rows,
             auth_required=bool(auth_required),
         )
 
-    def route(self, route: str, **options):
+    def route(self, route, **options):
         def decorator(func):
             self.register_route(route, func, **options)
             return func
         return decorator
 
-    def register_urlpattern(self, pattern, plugin_id: str | None = None):
+    def register_urlpattern(self, pattern, plugin_id=None):
         record = self._current_record(plugin_id)
         if not isinstance(pattern, (URLPattern, URLResolver)):
-            raise ValueError('urlpattern 必须是 django.urls.path/re_path/include 生成的对象')
+            raise ValueError('urlpattern 必须由 django.urls.path/re_path/include 创建')
         record.url_patterns.append(pattern)
 
-    def register_urlpatterns(self, patterns, plugin_id: str | None = None):
+    def register_urlpatterns(self, patterns, plugin_id=None):
         for pattern in patterns or []:
             self.register_urlpattern(pattern, plugin_id=plugin_id)
 
-    def emit(self, event: str, **context):
+    def _register_module(self, record):
+        super()._register_module(record)
+        if record.module is not None:
+            module_urlpatterns = getattr(record.module, 'urlpatterns', None)
+            if module_urlpatterns:
+                self.register_urlpatterns(module_urlpatterns, plugin_id=record.plugin_id)
+
+    def run_action(self, plugin_id, action, *, method='POST', request=None, payload=None, **context):
         self.ensure_loaded()
-        event_name = str(event or '').strip()
-        if not event_name:
-            return []
+        record = self._current_record(plugin_id)
+        registration = record.actions.get(str(action or '').strip())
+        if registration is None:
+            raise BackendPluginActionNotFoundError(f'后端插件动作不存在：{plugin_id}/{action}')
+        auth_context = _session_context(request, registration.auth_required)
+        return super().run_action(
+            plugin_id,
+            action,
+            method=method,
+            request=request,
+            payload=payload if isinstance(payload, dict) else {},
+            **auth_context,
+            **context,
+        )
 
-        rows = []
-        for plugin_id, handler in self._hooks.get(event_name, []):
-            try:
-                result = self._invoke_callable(handler, context)
-                rows.append({'plugin_id': plugin_id, 'status': 'ok', 'result': result})
-            except Exception as exc:
-                rows.append({'plugin_id': plugin_id, 'status': 'error', 'error': str(exc)})
-                LOGGER.exception('后端插件 hook 执行失败: %s/%s', plugin_id, event_name)
-        return rows
-
-    def list_plugins(self):
-        self.ensure_loaded()
-        rows = []
-        for record in sorted(self._plugins.values(), key=lambda item: item.plugin_id):
-            rows.append({
-                'id': record.plugin_id,
-                'name': record.name,
-                'version': record.version,
-                'description': record.description,
-                'author': record.author,
-                'website': record.website,
-                'path': record.path,
-                'hooks': sorted(record.hooks.keys()),
-                'actions': [
-                    {
-                        'name': action.name,
-                        'methods': list(action.methods),
-                        'description': action.description,
-                        'auth_required': action.auth_required,
-                    }
-                    for action in sorted(record.actions.values(), key=lambda item: item.name)
-                ],
-                'routes': [
-                    {
-                        'route': route.route,
-                        'methods': list(route.methods),
-                        'name': route.name,
-                        'description': route.description,
-                        'auth_required': route.auth_required,
-                    }
-                    for route in sorted(record.routes.values(), key=lambda item: item.route)
-                ],
-                'url_patterns': len(record.url_patterns),
-            })
-        return rows
-
-    def run_action(self, plugin_id: str, action: str, *, method='POST', request=None, payload=None, **context):
-        self.ensure_loaded()
-        plugin_key = str(plugin_id or '').strip()
-        action_key = str(action or '').strip()
-        if plugin_key not in self._plugins:
-            raise BackendPluginNotFoundError(f'后端插件不存在：{plugin_key}')
-        plugin_action = self._plugins[plugin_key].actions.get(action_key)
-        if not plugin_action:
-            raise BackendPluginActionNotFoundError(f'后端插件动作不存在：{plugin_key}/{action_key}')
-
-        request_method = str(method or '').upper() or 'POST'
-        if request_method not in plugin_action.methods:
-            raise BackendPluginMethodNotAllowedError(
-                f'后端插件动作不支持请求方法 {request_method}，仅支持 {",".join(plugin_action.methods)}'
-            )
-
-        context.update(_session_context(request, plugin_action.auth_required))
-        payload = payload if payload is not None else {}
-        context.update({
-            'request': request,
-            'payload': payload,
-            'plugin_id': plugin_key,
-            'action': action_key,
-            'registry': self,
-        })
-        return self._invoke_callable(plugin_action.handler, context)
-
-    def _build_route_view(self, plugin_id, plugin_route: BackendPluginRoute):
+    def _build_route_view(self, plugin_id, plugin_route):
         @require_http_methods(plugin_route.methods)
         def view(request, *args, **kwargs):
             try:
                 payload = _json_body(request) if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} else {}
-            except ValueError as exc:
-                return _json_error(exc)
-            try:
+                record = self._current_record(plugin_id)
+                if not record.enabled:
+                    raise PluginDisabledError(f'插件已禁用：{plugin_id}')
                 auth_context = _session_context(request, plugin_route.auth_required)
-                result = self._invoke_callable(plugin_route.handler, {
-                    'request': request,
-                    'payload': payload,
-                    'plugin_id': plugin_id,
-                    'route': plugin_route.route,
-                    'registry': self,
-                    'args': args,
-                    'kwargs': kwargs,
+                for capability in plugin_route.permissions:
+                    self.require_permission(plugin_id, capability, request=request)
+                ctx = self.create_context(
+                    plugin_id,
+                    request=request,
+                    payload=payload,
+                    route=plugin_route.route,
+                    args=args,
+                    kwargs=kwargs,
                     **auth_context,
                     **kwargs,
-                })
+                )
+                result = self._invoke_timed(plugin_route.handler, ctx, plugin_route.stats)
                 return _normalize_response(result)
             except BackendPluginAuthenticationError as exc:
                 return _json_error(exc, status=401, error='unauthorized')
+            except PluginDisabledError as exc:
+                return _json_error(exc, status=409, error='plugin_disabled')
             except Exception as exc:
                 LOGGER.exception('后端插件路由执行失败: %s/%s', plugin_id, plugin_route.route)
                 return _json_error(exc, status=500)
-
         return view
+
+    def serialize_record(self, record, *, detailed=False):
+        row = super().serialize_record(record, detailed=detailed)
+        row['routes'] = [
+            {
+                'route': route.route,
+                'methods': list(route.methods),
+                'name': route.name,
+                'description': route.description,
+                'permissions': list(route.permissions),
+                'auth_required': route.auth_required,
+                'stats': route.stats.to_dict(),
+            }
+            for route in sorted(record.routes.values(), key=lambda item: item.route)
+        ]
+        row['url_patterns'] = len(record.url_patterns)
+        return row
 
     def get_urlpatterns(self):
         self.ensure_loaded()
         patterns = [
             path('api/plugins', backend_plugins_list, name='backend_plugins_list'),
+            path('api/plugins/commands', backend_plugins_commands, name='backend_plugins_commands'),
+            path('api/plugins/contributions', backend_plugins_contributions, name='backend_plugins_contributions'),
             path('api/plugins/<str:plugin_id>/actions/<str:action>', backend_plugins_action, name='backend_plugins_action'),
+            path('api/plugins/<str:plugin_id>/commands/<path:command_id>', backend_plugins_command, name='backend_plugins_command'),
+            path('api/plugins/<str:plugin_id>/control', backend_plugins_control, name='backend_plugins_control'),
         ]
         for record in sorted(self._plugins.values(), key=lambda item: item.plugin_id):
             for route in sorted(record.routes.values(), key=lambda item: item.route):
@@ -571,40 +340,111 @@ class BackendPluginRegistry:
 backend_plugin_registry = BackendPluginRegistry()
 
 
+def _require_admin(request):
+    configured = str(os.getenv('CLOUD_PLUGIN_ADMIN_TOKEN') or '').strip()
+    supplied = str(request.headers.get('X-Plugin-Admin-Token') or '').strip()
+    if not configured or not supplied or not hmac.compare_digest(configured, supplied):
+        raise BackendPluginAuthenticationError('插件管理凭据无效')
+
+
 @require_http_methods(['GET'])
 def backend_plugins_list(request):
     return JsonResponse({
         'ok': True,
         'status': 'success',
-        'plugins': backend_plugin_registry.list_plugins(),
+        'plugin_api_version': backend_plugin_registry.api_version,
+        'app_version': backend_plugin_registry.app_version,
+        'plugins': backend_plugin_registry.list_plugins(detailed=True),
         'load_errors': backend_plugin_registry.load_errors,
+    })
+
+
+@require_http_methods(['GET'])
+def backend_plugins_commands(request):
+    return JsonResponse({
+        'ok': True,
+        'status': 'success',
+        'commands': backend_plugin_registry.list_commands(placement=request.GET.get('placement', '')),
+    })
+
+
+@require_http_methods(['GET'])
+def backend_plugins_contributions(request):
+    return JsonResponse({
+        'ok': True,
+        'status': 'success',
+        'contributions': backend_plugin_registry.list_contributions(slot=request.GET.get('slot', '')),
     })
 
 
 @require_http_methods(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
 def backend_plugins_action(request, plugin_id, action):
     try:
-        payload = _json_body(request) if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} else {}
-    except ValueError as exc:
-        return _json_error(exc)
-
-    try:
+        payload = _json_body(request) if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'} else dict(request.GET.items())
         result = backend_plugin_registry.run_action(
-            plugin_id,
-            action,
-            method=request.method,
-            request=request,
-            payload=payload,
+            plugin_id, action, method=request.method, request=request, payload=payload,
         )
         return _normalize_response(result)
-    except BackendPluginNotFoundError as exc:
-        return _json_error(exc, status=404)
-    except BackendPluginActionNotFoundError as exc:
+    except (BackendPluginNotFoundError, BackendPluginActionNotFoundError) as exc:
         return _json_error(exc, status=404)
     except BackendPluginMethodNotAllowedError as exc:
         return _json_error(exc, status=405)
     except BackendPluginAuthenticationError as exc:
         return _json_error(exc, status=401, error='unauthorized')
+    except PluginDisabledError as exc:
+        return _json_error(exc, status=409, error='plugin_disabled')
+    except ValueError as exc:
+        return _json_error(exc)
     except Exception as exc:
         LOGGER.exception('后端插件 action 执行失败: %s/%s', plugin_id, action)
+        return _json_error(exc, status=500)
+
+
+@require_http_methods(['POST'])
+def backend_plugins_command(request, plugin_id, command_id):
+    try:
+        payload = _json_body(request)
+        result = backend_plugin_registry.run_command(
+            plugin_id,
+            command_id,
+            request=request,
+            payload=payload,
+        )
+        return _normalize_response(result)
+    except (PluginNotFoundError, PluginActionNotFoundError) as exc:
+        return _json_error(exc, status=404)
+    except PluginDisabledError as exc:
+        return _json_error(exc, status=409, error='plugin_disabled')
+    except ValueError as exc:
+        return _json_error(exc)
+    except Exception as exc:
+        LOGGER.exception('后端插件 command 执行失败: %s/%s', plugin_id, command_id)
+        return _json_error(exc, status=500)
+
+
+@require_http_methods(['POST'])
+def backend_plugins_control(request, plugin_id):
+    try:
+        _require_admin(request)
+        payload = _json_body(request)
+        operation = str(payload.get('operation') or '').strip().lower()
+        if operation == 'enable':
+            result = backend_plugin_registry.enable_plugin(plugin_id)
+        elif operation == 'disable':
+            result = backend_plugin_registry.disable_plugin(plugin_id)
+        elif operation == 'reload':
+            result = backend_plugin_registry.reload(plugin_id)
+        elif operation == 'uninstall':
+            result = backend_plugin_registry.uninstall_plugin(plugin_id, clear_data=bool(payload.get('clear_data')))
+        else:
+            return _json_error('operation 仅支持 enable、disable、reload、uninstall')
+        return JsonResponse({'ok': True, 'status': 'success', 'plugin': result})
+    except BackendPluginAuthenticationError as exc:
+        return _json_error(exc, status=401, error='unauthorized')
+    except PluginNotFoundError as exc:
+        return _json_error(exc, status=404)
+    except ValueError as exc:
+        return _json_error(exc)
+    except Exception as exc:
+        LOGGER.exception('后端插件管理失败: %s', plugin_id)
         return _json_error(exc, status=500)

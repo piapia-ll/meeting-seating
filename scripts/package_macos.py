@@ -169,7 +169,7 @@ def main():
         print('macOS DMG 打包脚本只能在 macOS 上运行。', file=sys.stderr, flush=True)
         sys.exit(1)
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     version = _resolve_version(base_dir)
     safe_version = _safe_filename_part(version)
     artifacts_dir = os.path.join(base_dir, 'artifacts', 'macos')
@@ -181,7 +181,7 @@ def main():
     print(f'开始构建 macOS 版本: {version}', flush=True)
     package_env = os.environ.copy()
     package_env['FUCKSEATS_APP_VERSION'] = version
-    subprocess.check_call([sys.executable, 'package.py'], cwd=base_dir, env=package_env)
+    subprocess.check_call([sys.executable, 'scripts/package.py'], cwd=base_dir, env=package_env)
 
     app_bundle_path = _find_app_bundle(base_dir)
     if not app_bundle_path:

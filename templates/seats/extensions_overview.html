@@ -215,7 +215,7 @@ document.addEventListener('click', async function (event) {
             btn.textContent = '复制 sendMessage 地址';
         }, 1200);
     } catch (_) {
-        window.prompt('复制以下地址', absoluteUrl);
+        await window.showPromptModal('自动复制失败，请手动复制以下地址', { title: '复制地址', defaultValue: absoluteUrl, okText: '完成' });
     }
 });
 </script>

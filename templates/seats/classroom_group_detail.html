@@ -477,13 +477,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 updateBatchState();
             });
         });
-        batchForm.addEventListener('submit', function (event) {
+        batchForm.addEventListener('submit', async function (event) {
             var selectedCount = classroomCheckboxes.filter(function (input) {
                 return input.checked;
             }).length;
-            if (!selectedCount || !window.confirm(
-                '确定删除选中的 ' + selectedCount + ' 个班级及其全部配置吗？此操作不可撤销。'
-            )) {
+            if (!selectedCount) {
+                event.preventDefault();
+                return;
+            }
+            var confirmed = window.showConfirmModal
+                ? await window.showConfirmModal('确定删除选中的 ' + selectedCount + ' 个班级及其全部配置吗？此操作不可撤销。', { title: '删除班级', okText: '删除', danger: true })
+                : window.confirm('确定删除选中的 ' + selectedCount + ' 个班级及其全部配置吗？此操作不可撤销。');
+            if (!confirmed) {
                 event.preventDefault();
             }
         });

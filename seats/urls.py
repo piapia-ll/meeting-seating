@@ -11,6 +11,15 @@ urlpatterns = [
     path('about/', views.about_page, name='about'),
     path('plugins/', views.plugins_overview, name='plugins_overview'),
     path('plugins/components/', views.plugin_components_overview, name='plugin_components_overview'),
+    path('plugins/api/packages/install/', views.plugin_package_install, name='plugin_package_install'),
+    path('plugins/api/marketplace/', views.plugin_marketplace, name='plugin_marketplace'),
+    path('plugins/api/commands/', views.plugin_commands_overview, name='plugin_commands_overview'),
+    path('plugins/api/contributions/', views.plugin_contributions_overview, name='plugin_contributions_overview'),
+    path('plugins/<str:plugin_id>/commands/<path:command_id>/', views.plugin_command_dispatch, name='plugin_command_dispatch'),
+    path('plugins/<str:plugin_id>/devtools/', views.plugin_devtools, name='plugin_devtools'),
+    path('plugins/<str:plugin_id>/devtools/control/', views.plugin_devtools_control, name='plugin_devtools_control'),
+    path('plugins/<str:plugin_id>/storage/<str:namespace>/', views.plugin_storage_dispatch, name='plugin_storage_dispatch'),
+    path('plugins/<str:plugin_id>/package/', views.plugin_package_remove, name='plugin_package_remove'),
     path('plugins/<str:plugin_id>/ui/<str:ui_name>/page/', views.plugin_ui_page, name='plugin_ui_page'),
     path('plugins/<str:plugin_id>/ui/<str:ui_name>/', views.plugin_ui_dispatch, name='plugin_ui_dispatch'),
     path('plugins/<str:plugin_id>/<str:action>/', views.plugin_action_dispatch, name='plugin_action_dispatch'),
@@ -166,6 +175,7 @@ urlpatterns = [
     path('api/ai-session/stream/', views.ai_session_stream, name='ai_session_stream_slash'),
     path('api/realtime', views.realtime_status, name='realtime_status'),
     path('api/realtime/', views.realtime_status, name='realtime_status_slash'),
+    path('classrooms/batch-copy', views.batch_copy_classrooms, name='batch_copy_classrooms'),
 ]
 
 pass # 此部分代码未被披露至开源版本

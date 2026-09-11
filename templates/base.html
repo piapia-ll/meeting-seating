@@ -137,6 +137,7 @@
     <template id="cloud-offline-icon-template">{% include "wifi.exclamationmark.circle.fill.svg" %}</template>
     <script src="{% static 'js/vendor/driver.js' %}?v=1.0.2"></script>
     <script src="{% static 'js/popup_manager.js' %}?v=1.1"></script>
+    <script src="{% static 'js/dialog.js' %}?v=1.0"></script>
     <script src="{% static 'js/cloud.js' %}?v=2.1"></script>
     <script src="{% static 'js/data_sharing.js' %}?v=1.0"></script>
     <script src="{% static 'js/toast.js' %}?v=2.0"></script>
@@ -256,7 +257,7 @@
         window.ONBOARDING_SHOULD_SHOW = {% if onboarding_should_show %}true{% else %}false{% endif %};
         window.ONBOARDING_SAMPLE_PK = {{ onboarding_sample_pk|default_if_none:'null' }};
     </script>
-    <script src="{% static 'js/onboarding.js' %}?v=1.12"></script>
+    <script src="{% static 'js/onboarding.js' %}?v=1.13"></script>
 </body>
 
 </html>

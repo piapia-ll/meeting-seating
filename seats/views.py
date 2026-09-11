@@ -12,7 +12,9 @@ import base64
 import hashlib
 import desktop_runtime
 import copy
-from app_paths import PROJECT_ROOT, temp_directory
+from app_paths import PROJECT_ROOT, backups_directory, temp_directory, user_plugins_directory
+from plugin_core import PluginPackageError, PluginPackageManager, fetch_marketplace_index
+from plugin_core.manifest import version_matches
 from .models import (
     Classroom,
     ClassroomGroup,
@@ -88,6 +90,7 @@ from .constraints import (
 from .plugin_components import plugin_component_library
 from .plugin_system import (
     plugin_registry,
+    PluginDisabledError,
     PluginActionMethodNotAllowedError,
     PluginActionNotFoundError,
     PluginNotFoundError,
@@ -973,6 +976,21 @@ def create_classroom(request):
         'classrooms': Classroom.objects.all().order_by('name', 'pk'),
     })
 
+@require_POST
+def batch_copy_classrooms(request):
+    source_id = _safe_int(request.POST.get('source_classroom_id'), 0)
+    source = get_object_or_404(Classroom, pk=source_id)
+    names = [str(n).strip() for n in request.POST.getlist('names') if str(n).strip()]
+    if not names:
+        names = [n.strip() for n in request.POST.get('names_text', '').splitlines() if n.strip()]
+    created = []
+    with transaction.atomic():
+        for name in names[:100]:
+            target = Classroom.objects.create(name=name, rows=source.rows, cols=source.cols)
+            _clone_classroom_layout(source, target)
+            created.append(target.name)
+    return JsonResponse({'created': created, 'count': len(created)})
+
 
 def create_classroom_group(request):
     source_classrooms = Classroom.objects.select_related('classroom_group').all().order_by(
@@ -1404,6 +1422,19 @@ def _emit_plugin_hook(event_name, *, request=None, classroom=None, payload=None)
     )
 
 
+def _emit_plugin_intervention(event_name, *, request=None, classroom=None, payload=None, **context):
+    return plugin_registry.emit(
+        event_name,
+        mode='intervention',
+        hook=event_name,
+        request=request,
+        classroom=classroom,
+        payload=payload if isinstance(payload, dict) else {},
+        timestamp=timezone.now().isoformat(),
+        **context,
+    )
+
+
 def _extract_plugin_payload(request):
     if request.method == 'GET':
         return dict(request.GET.items())
@@ -1508,17 +1539,267 @@ def plugins_overview(request):
     plugin_registry.ensure_loaded()
     return JsonResponse({
         'status': 'success',
-        'plugins': plugin_registry.list_plugins(),
+        'plugin_api_version': plugin_registry.api_version,
+        'app_version': plugin_registry.app_version,
+        'plugins': plugin_registry.list_plugins(detailed=True),
         'load_errors': plugin_registry.load_errors,
     })
 
 
 @require_http_methods(['GET'])
 def plugin_components_overview(request):
+    component_names = plugin_component_library.names()
     return JsonResponse({
         'status': 'success',
-        'components': plugin_component_library.names(),
-        'count': len(plugin_component_library.names()),
+        'components': component_names,
+        'count': len(component_names),
+        'interactive_components': [
+            'input', 'textarea', 'select', 'checkbox', 'radio',
+            'form', 'tabs', 'alert', 'button', 'modal',
+        ],
+        'protocol_version': 1,
+    })
+
+
+def _plugin_trusted_public_keys():
+    raw = str(os.getenv('PLUGIN_TRUSTED_PUBLIC_KEYS') or '').strip()
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return {
+        str(key): str(public_key)
+        for key, public_key in value.items()
+        if isinstance(value, dict) and str(key).strip() and str(public_key).strip()
+    } if isinstance(value, dict) else {}
+
+
+def _plugin_package_manager():
+    return PluginPackageManager(
+        user_plugins_directory(),
+        backup_root=backups_directory() / 'plugins',
+        trusted_public_keys=_plugin_trusted_public_keys(),
+        require_trusted_signature=bool(getattr(settings, 'PLUGIN_REQUIRE_TRUSTED_SIGNATURE', False)),
+        app_version=plugin_registry.app_version,
+        api_version=plugin_registry.api_version,
+    )
+
+
+@require_http_methods(['POST'])
+def plugin_package_install(request):
+    package_file = request.FILES.get('package')
+    if package_file is None:
+        return JsonResponse({'status': 'error', 'message': '缺少 package 文件'}, status=400)
+    if int(getattr(package_file, 'size', 0) or 0) > 25 * 1024 * 1024:
+        return JsonResponse({'status': 'error', 'message': '插件包不能超过 25MB'}, status=400)
+    operation = str(request.POST.get('operation') or 'install').strip().lower()
+    if operation not in {'install', 'update'}:
+        return JsonResponse({'status': 'error', 'message': 'operation 仅支持 install 或 update'}, status=400)
+    confirm_trusted = str(request.POST.get('confirm_trusted') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    try:
+        result = _plugin_package_manager().install(
+            package_file.read(),
+            update=operation == 'update',
+            confirm_trusted=confirm_trusted,
+        )
+        plugin_registry.reload()
+        result['plugin'] = next(
+            (row for row in plugin_registry.list_plugins(detailed=True) if row.get('id') == result['id']),
+            None,
+        )
+    except PluginPackageError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'message': f'插件包处理失败：{exc}'}, status=500)
+    return JsonResponse({'status': 'success', 'package': result})
+
+
+@require_http_methods(['POST', 'DELETE'])
+def plugin_package_remove(request, plugin_id):
+    try:
+        payload = _extract_plugin_payload(request)
+    except ValueError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+    confirmed = str(payload.get('confirm_remove') or '').strip().lower() in {'1', 'true', 'yes', 'on'}
+    if not confirmed:
+        return JsonResponse({'status': 'error', 'message': '移除插件需要 confirm_remove=true'}, status=400)
+    try:
+        plugin_registry.uninstall_plugin(plugin_id, clear_data=bool(payload.get('clear_data')))
+        result = _plugin_package_manager().remove(plugin_id)
+        plugin_registry.reload()
+    except (PluginPackageError, PluginNotFoundError) as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'message': f'移除插件失败：{exc}'}, status=500)
+    return JsonResponse({'status': 'success', 'package': result})
+
+
+@require_http_methods(['GET'])
+def plugin_marketplace(request):
+    marketplace_url = str(getattr(settings, 'PLUGIN_MARKETPLACE_URL', '') or '').strip()
+    if not marketplace_url:
+        return JsonResponse({
+            'status': 'success',
+            'configured': False,
+            'plugins': [],
+            'updates': [],
+        })
+    try:
+        index = fetch_marketplace_index(marketplace_url)
+    except PluginPackageError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=502)
+    installed = {row['id']: row for row in plugin_registry.list_plugins(detailed=True)}
+    updates = []
+    for item in index.get('plugins') or []:
+        if not isinstance(item, dict):
+            continue
+        plugin_id = str(item.get('id') or '').strip()
+        latest = str(item.get('version') or '').strip()
+        current = installed.get(plugin_id)
+        if current and latest:
+            try:
+                available = version_matches(latest, f'>{current.get("version") or "0.0.0"}')
+            except Exception:
+                available = False
+            updates.append({
+                'id': plugin_id,
+                'current_version': current.get('version'),
+                'latest_version': latest,
+                'update_available': available,
+                'package_url': item.get('package_url') or '',
+                'signature_key_id': item.get('signature_key_id') or '',
+            })
+    return JsonResponse({
+        'status': 'success',
+        'configured': True,
+        'marketplace': {
+            'name': index.get('name') or 'FuckSeats Plugin Marketplace',
+            'api_version': index.get('api_version') or 1,
+        },
+        'plugins': index.get('plugins') or [],
+        'updates': updates,
+    })
+
+
+@require_http_methods(['GET'])
+def plugin_commands_overview(request):
+    return JsonResponse({
+        'status': 'success',
+        'commands': plugin_registry.list_commands(placement=str(request.GET.get('placement') or '')),
+    })
+
+
+@require_http_methods(['GET'])
+def plugin_contributions_overview(request):
+    return JsonResponse({
+        'status': 'success',
+        'contributions': plugin_registry.list_contributions(slot=str(request.GET.get('slot') or '')),
+    })
+
+
+@require_http_methods(['GET'])
+def plugin_devtools(request, plugin_id):
+    plugin_row = _get_plugin_row(plugin_id)
+    if not plugin_row:
+        return JsonResponse({'status': 'error', 'message': '插件不存在'}, status=404)
+    detailed = next(
+        (item for item in plugin_registry.list_plugins(detailed=True) if item.get('id') == plugin_id),
+        plugin_row,
+    )
+    return JsonResponse({
+        'status': 'success',
+        'plugin': detailed,
+        'load_errors': [
+            item for item in plugin_registry.load_errors
+            if plugin_id in str(item.get('path') or '') or plugin_id in str(item.get('error') or '')
+        ],
+    })
+
+
+@require_http_methods(['POST'])
+def plugin_devtools_control(request, plugin_id):
+    try:
+        payload = _extract_plugin_payload(request)
+        operation = str(payload.get('operation') or '').strip().lower()
+        if operation == 'enable':
+            result = plugin_registry.enable_plugin(plugin_id)
+        elif operation == 'disable':
+            result = plugin_registry.disable_plugin(plugin_id)
+        elif operation == 'reload':
+            result = plugin_registry.reload(plugin_id)
+        elif operation == 'uninstall':
+            result = plugin_registry.uninstall_plugin(plugin_id, clear_data=bool(payload.get('clear_data')))
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'operation 仅支持 enable、disable、reload、uninstall',
+            }, status=400)
+    except PluginNotFoundError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
+    except ValueError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'message': f'插件管理失败：{exc}'}, status=500)
+    return JsonResponse({'status': 'success', 'plugin': result})
+
+
+@require_http_methods(['GET', 'POST', 'DELETE'])
+def plugin_storage_dispatch(request, plugin_id, namespace):
+    plugin_row = _get_plugin_row(plugin_id)
+    if not plugin_row:
+        return JsonResponse({'status': 'error', 'message': '插件不存在'}, status=404)
+    if namespace not in {'storage', 'settings'}:
+        return JsonResponse({'status': 'error', 'message': '仅开放 storage 与 settings 命名空间'}, status=400)
+    bundle = plugin_registry.get_storage_bundle(plugin_id)
+    store = getattr(bundle, namespace)
+    try:
+        if request.method == 'GET':
+            key = str(request.GET.get('key') or '').strip()
+            if key:
+                return JsonResponse({'status': 'success', 'key': key, 'value': store.get(key)})
+            return JsonResponse({'status': 'success', 'keys': store.keys()})
+        payload = _extract_plugin_payload(request)
+        key = str(payload.get('key') or '').strip()
+        if not key:
+            raise ValueError('缺少 key')
+        if request.method == 'DELETE':
+            deleted = store.delete(key)
+            return JsonResponse({'status': 'success', 'key': key, 'deleted': deleted})
+        value = payload.get('value')
+        store.set(key, value)
+        return JsonResponse({'status': 'success', 'key': key, 'value': value})
+    except ValueError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+
+
+@require_http_methods(['POST'])
+def plugin_command_dispatch(request, plugin_id, command_id):
+    try:
+        payload = _extract_plugin_payload(request)
+        classroom = _resolve_plugin_classroom(payload)
+        payload.pop('classroom_id', None)
+        result = plugin_registry.run_command(
+            plugin_id,
+            command_id,
+            request=request,
+            classroom=classroom,
+            payload=payload,
+        )
+    except ValueError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=400)
+    except (PluginNotFoundError, PluginActionNotFoundError) as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
+    except PluginDisabledError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=409)
+    except Exception as exc:
+        return JsonResponse({'status': 'error', 'message': f'插件命令执行失败：{exc}'}, status=500)
+    return JsonResponse({
+        'status': 'success',
+        'plugin': plugin_id,
+        'command': command_id,
+        'result': result,
     })
 
 
@@ -1534,6 +1815,7 @@ def _get_plugin_row(plugin_id):
 def _build_extension_manifest(plugin_row):
     plugin_id = str(plugin_row.get('id') or '').strip()
     actions = plugin_row.get('actions') or []
+    commands = plugin_row.get('commands') or []
     ui_scripts = plugin_row.get('ui_scripts') or []
     workspace_scripts = plugin_row.get('workspace_scripts') or []
 
@@ -1544,15 +1826,25 @@ def _build_extension_manifest(plugin_row):
             popup_url = reverse('plugin_ui_page', args=[plugin_id, popup_name])
 
     workspace_requires_permission = any(bool(item.get('requires_permission')) for item in workspace_scripts)
-    permissions = ['plugin.runtime', 'classroom.read']
+    permissions = [
+        str(item.get('id') or '').strip()
+        for item in (plugin_row.get('permissions') or [])
+        if isinstance(item, dict) and str(item.get('id') or '').strip()
+    ]
+    if not permissions:
+        permissions = ['plugin.runtime', 'classroom.read']
     if workspace_requires_permission:
-        permissions.append('workspace.dom.write')
+        if 'workspace.dom' not in permissions:
+            permissions.append('workspace.dom')
 
     manifest = {
         'manifest_version': 3,
         'name': plugin_row.get('name') or plugin_id,
         'short_name': plugin_id,
         'version': plugin_row.get('version') or '0.0.1',
+        'plugin_api_version': plugin_row.get('api_version') or {'min': 1, 'max': 1},
+        'enabled': bool(plugin_row.get('enabled', True)),
+        'trust_level': plugin_row.get('trust_level') or 'trusted',
         'description': plugin_row.get('description') or '',
         'author': plugin_row.get('author') or '',
         'homepage_url': plugin_row.get('website') or '',
@@ -1563,14 +1855,18 @@ def _build_extension_manifest(plugin_row):
         'permissions': permissions,
         'host_permissions': ['/plugins/*', '/extensions/*'],
         'commands': {
-            item.get('name'): {
+            item.get('id'): {
+                'title': item.get('title') or item.get('id'),
                 'description': item.get('description') or '',
-                'methods': item.get('methods') or [],
+                'shortcut': item.get('shortcut') or '',
+                'placements': item.get('placements') or [],
             }
-            for item in actions
-            if item.get('name')
+            for item in commands
+            if item.get('id')
         },
         'plugin_actions': actions,
+        'plugin_commands': commands,
+        'plugin_contributions': plugin_row.get('contributions') or {},
         'plugin_ui_scripts': [
             {
                 **item,
@@ -1587,6 +1883,10 @@ def _build_extension_manifest(plugin_row):
             'permissions': reverse('extension_workspace_permission', args=[plugin_id]),
             'plugin_api_root': reverse('plugins_overview'),
             'components_library': reverse('plugin_components_overview'),
+            'commands': reverse('plugin_commands_overview'),
+            'contributions': reverse('plugin_contributions_overview'),
+            'devtools': reverse('plugin_devtools', args=[plugin_id]),
+            'control': reverse('plugin_devtools_control', args=[plugin_id]),
         },
         'externally_connectable': {
             'matches': ['<all_urls>'],
@@ -1626,6 +1926,7 @@ def extensions_overview(request):
         plugin_id = plugin_row.get('id')
         ui_scripts = plugin_row.get('ui_scripts') or []
         actions = plugin_row.get('actions') or []
+        commands = plugin_row.get('commands') or []
         workspace_scripts = plugin_row.get('workspace_scripts') or []
 
         first_ui_page_url = ''
@@ -1650,6 +1951,10 @@ def extensions_overview(request):
             'first_ui_page_url': first_ui_page_url,
             'ui_scripts': ui_scripts,
             'actions': actions,
+            'commands': commands,
+            'contribution_slots': plugin_row.get('contribution_slots') or [],
+            'enabled': bool(plugin_row.get('enabled', True)),
+            'trust_level': plugin_row.get('trust_level') or 'trusted',
             'workspace_scripts': workspace_scripts,
             'workspace_permission_required': workspace_permission_required,
             'workspace_permission_granted': workspace_permission_granted,
@@ -1761,7 +2066,28 @@ def extension_send_message(request, plugin_id):
     message_type = str(message.get('type') or message.get('target') or 'action').strip().lower()
 
     try:
-        if message_type in {'action', 'command'}:
+        if message_type == 'command':
+            command_id = str(message.get('name') or message.get('command') or '').strip()
+            if not command_id:
+                return JsonResponse({'status': 'error', 'message': '缺少 command id'}, status=400)
+            command_payload = message.get('payload') if isinstance(message.get('payload'), dict) else {}
+            result = plugin_registry.run_command(
+                plugin_id,
+                command_id,
+                request=request,
+                classroom=classroom,
+                payload=command_payload,
+                runtime_message=message,
+            )
+            return JsonResponse({
+                'status': 'success',
+                'extension': plugin_id,
+                'message_type': 'command',
+                'name': command_id,
+                'result': _normalize_extension_result(result),
+            })
+
+        if message_type == 'action':
             action_name = str(message.get('name') or message.get('action') or '').strip()
             if not action_name:
                 return JsonResponse({'status': 'error', 'message': '缺少 action 名称'}, status=400)
@@ -1853,6 +2179,8 @@ def extension_send_message(request, plugin_id):
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
     except PluginActionMethodNotAllowedError as exc:
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=405)
+    except PluginDisabledError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=409)
     except PluginUIScriptNotFoundError as exc:
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
     except PluginUIScriptMethodNotAllowedError as exc:
@@ -1908,6 +2236,8 @@ def plugin_action_dispatch(request, plugin_id, action):
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
     except PluginActionMethodNotAllowedError as exc:
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=405)
+    except PluginDisabledError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=409)
     except Exception as exc:
         return JsonResponse({'status': 'error', 'message': f'插件执行失败：{exc}'}, status=500)
 
@@ -1947,6 +2277,8 @@ def plugin_ui_dispatch(request, plugin_id, ui_name):
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=404)
     except PluginUIScriptMethodNotAllowedError as exc:
         return JsonResponse({'status': 'error', 'message': str(exc)}, status=405)
+    except PluginDisabledError as exc:
+        return JsonResponse({'status': 'error', 'message': str(exc)}, status=409)
     except Exception as exc:
         return JsonResponse({'status': 'error', 'message': f'插件 UI 生成失败：{exc}'}, status=500)
 
@@ -10911,6 +11243,16 @@ def auto_arrange_seats(request, pk):
             return HttpResponse(message, status=status)
 
         method = str(request.POST.get('method') or 'random').strip()
+        intervention = _emit_plugin_intervention(
+            'arrange.before_execute',
+            request=request,
+            classroom=classroom,
+            payload={'method': method},
+            method=method,
+        )
+        if intervention.get('cancelled'):
+            return _arrange_error(intervention.get('reason') or '排座操作已被插件取消', status=409)
+        method = str((intervention.get('context') or {}).get('method') or method).strip()
         if method not in {
             'random',
             'score_desc',
@@ -15417,6 +15759,19 @@ def delete_classroom(request, pk):
     classroom = get_object_or_404(Classroom, pk=pk)
     sync_meta = SyncMeta.objects.filter(classroom=classroom).first()
     is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    intervention = _emit_plugin_intervention(
+        'classroom.before_delete',
+        request=request,
+        classroom=classroom,
+        payload={'classroom_id': classroom.pk, 'name': classroom.name},
+    )
+    if intervention.get('cancelled'):
+        message = intervention.get('reason') or '删除操作已被插件取消'
+        if is_ajax:
+            return JsonResponse({'status': 'error', 'message': message}, status=409)
+        return redirect(
+            f"{reverse('classroom_detail', kwargs={'pk': pk})}?error={_url_quote(message)}"
+        )
     try:
         _cloud_delete_backed_up_classroom(sync_meta)
     except Exception as exc:
@@ -17360,10 +17715,23 @@ def mark_onboarding_seen(request):
         defaults={'value': ONBOARDING_SEEN_STORE_VALUE},
     )
     stage = str((body or {}).get('completed_steps') or '').strip()
+    sample_deleted = False
     if stage in {'detail_done', 'tour_done', 'index_skip'}:
+        # 先留下首页兜底标记，再在完成请求内直接清理。旧实现只在下一次
+        # GET / 时删除，完成请求被前端当作成功但跳转/会话时序异常时，
+        # 示例班级就会永久残留。
         request.session[_CLEANUP_PENDING_KEY] = True
         request.session.modified = True
-    payload = {'ok': True, 'sample_deleted': False}
+        sample_deleted = _delete_onboarding_sample(
+            request,
+            prefer_pk=(body or {}).get('current_classroom_id'),
+        )
+        if sample_deleted:
+            request.session.pop(_CLEANUP_PENDING_KEY, None)
+            request.session.modified = True
+    payload = {'ok': True, 'sample_deleted': sample_deleted}
+    if sample_deleted:
+        payload['redirect_url'] = reverse('index')
     return JsonResponse(payload)
 
 

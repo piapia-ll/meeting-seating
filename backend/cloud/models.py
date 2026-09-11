@@ -147,3 +147,24 @@ class CloudServiceKey(models.Model):
 
     def __str__(self):
         return f'{self.key_id}-{"active" if self.is_active else "inactive"}'
+
+
+class PluginRuntimeKV(models.Model):
+    plugin_id = models.CharField(max_length=64, db_index=True)
+    namespace = models.CharField(max_length=32)
+    key = models.CharField(max_length=160)
+    value = models.TextField(blank=True, default='')
+    is_secret = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['plugin_id', 'namespace', 'key'],
+                name='cloud_plugin_runtime_kv_unique',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['plugin_id', 'namespace'], name='cloud_plugin_runtime_ns_idx'),
+        ]
