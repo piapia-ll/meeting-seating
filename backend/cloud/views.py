@@ -4,7 +4,7 @@ import urllib.parse
 import uuid
 from datetime import timedelta
 
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.db import transaction
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
@@ -105,6 +105,21 @@ def _append_query(url, params):
     return f'{url}{separator}{urllib.parse.urlencode(params)}'
 
 
+def _oauth_status_page(message, redirect_url, *, success=True):
+    """Show a short, branded hand-off page while the desktop client resumes OAuth."""
+    target = json.dumps(str(redirect_url), ensure_ascii=False)
+    state_class = 'success' if success else 'error'
+    return HttpResponse(f'''<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>云服务登录</title><style>
+:root{{--blue:#0a59f7;--ink:#17181c;--muted:#747984;--bg:#f5f7fb}}
+*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;color:var(--ink)}}
+.card{{width:min(420px,calc(100% - 32px));padding:38px 30px 34px;display:flex;flex-direction:column;align-items:center;text-align:center;background:#fff;border:1px solid #e7eaf0;border-radius:22px;box-shadow:0 18px 50px rgba(25,42,80,.1)}}
+.icon{{width:58px;height:58px;margin:0 auto 18px;border-radius:18px;display:grid;place-items:center;background:rgba(10,89,247,.1);color:var(--blue);font-size:28px}}h1{{margin:0 0 10px;font-size:22px;text-align:center}}p{{width:100%;margin:0;color:var(--muted);line-height:1.6;font-size:14px;text-align:center}}.spinner{{width:18px;height:18px;margin:22px auto 0;border:2px solid #dce5ff;border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}}.error .icon{{background:#fff0f0;color:#c9342f}}.error .spinner{{display:none}}@keyframes spin{{to{{transform:rotate(360deg)}}}}
+</style></head><body><main class="card {state_class}"><div class="icon">{'✓' if success else '!'}</div><h1>云服务登录</h1><p>{message}</p><div class="spinner" aria-label="正在加载"></div></main>
+<script>setTimeout(function(){{location.replace({target});}}, {'900' if success else '1800'});</script></body></html>''')
+
+
 def _oauth_redirect_uri():
     return f'{get_server_base_url()}/auth/oauth-callback'
 
@@ -176,10 +191,10 @@ def auth_oauth_callback(request):
     if oauth_error:
         pending.oauth_error = oauth_error[:200]
         pending.save(update_fields=['oauth_error'])
-        return HttpResponseRedirect(_append_query(pending.callback_url, {'error': oauth_error}))
+        return _oauth_status_page('登录已取消，正在返回应用。', _append_query(pending.callback_url, {'error': oauth_error}), success=False)
 
     if not code:
-        return HttpResponseRedirect(_append_query(pending.callback_url, {'error': 'missing_code'}))
+        return _oauth_status_page('未收到登录授权，正在返回应用。', _append_query(pending.callback_url, {'error': 'missing_code'}), success=False)
 
     try:
         token_payload = exchange_code_for_token(code, redirect_uri=_oauth_redirect_uri())
@@ -188,13 +203,13 @@ def auth_oauth_callback(request):
     except OAuthError as exc:
         pending.oauth_error = str(exc)[:200]
         pending.save(update_fields=['oauth_error'])
-        return HttpResponseRedirect(_append_query(pending.callback_url, {'error': 'oauth_failed'}))
+        return _oauth_status_page('登录处理失败，正在返回应用。', _append_query(pending.callback_url, {'error': 'oauth_failed'}), success=False)
 
     pending.user = user
     pending.session_code = secrets.token_urlsafe(32)
     pending.session_code_created_at = timezone.now()
     pending.save(update_fields=['user', 'session_code', 'session_code_created_at'])
-    return HttpResponseRedirect(_append_query(pending.callback_url, {'code': pending.session_code}))
+    return _oauth_status_page('登录成功，正在返回应用……', _append_query(pending.callback_url, {'code': pending.session_code}))
 
 
 @require_http_methods(['POST'])

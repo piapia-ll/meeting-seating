@@ -1,7 +1,10 @@
 import json
+import http.client
 import os
 import ssl
+import socket
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,6 +24,7 @@ DEFAULT_CLOUD_SERVER_URL = OFFICIAL_CLOUD_SERVER_URL
 DEFAULT_CLOUD_CALLBACK_URL = os.getenv('FUCKSEATS_CLOUD_CALLBACK_URL', 'http://localhost:23948/cloud/callback').strip() or 'http://localhost:23948/cloud/callback'
 CLOUD_USER_AGENT = os.getenv('FUCKSEATS_CLOUD_USER_AGENT', 'fuckseats_cilent').strip() or 'fuckseats_cilent'
 CLOUD_SERVER_URL_KEY = 'cloud_server_url'
+TRANSIENT_REQUEST_RETRIES = 3
 AUTO_REFRESH_SUBSCRIPTION_EXCLUDED_PATHS = {
     '/auth/exchange',
     '/auth/logout',
@@ -85,6 +89,18 @@ def _read_json_response(response):
     if not raw:
         return {}
     return json.loads(raw.decode('utf-8'))
+
+
+def _is_transient_request_error(error):
+    """Return whether a network error is safe to retry for an idempotent read."""
+    reason = getattr(error, 'reason', error)
+    return isinstance(reason, (
+        ssl.SSLEOFError,
+        ConnectionResetError,
+        TimeoutError,
+        socket.timeout,
+        http.client.RemoteDisconnected,
+    ))
 
 
 def _unwrap_encrypted_response(payload, session=None):
@@ -197,24 +213,35 @@ def _request_json(method, url, body=None, headers=None, timeout=20):
         request_headers['Content-Type'] = 'application/json'
         data = json.dumps(body, ensure_ascii=False).encode('utf-8')
 
-    req = urllib.request.Request(url, data=data, headers=request_headers, method=method.upper())
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=_get_ssl_context()) as response:
-            payload = _read_json_response(response)
-            payload.setdefault('_http_status', getattr(response, 'status', 200))
-            return payload
-    except urllib.error.HTTPError as exc:
+    request_method = method.upper()
+    request_attempts = TRANSIENT_REQUEST_RETRIES if request_method in {'GET', 'HEAD', 'OPTIONS'} else 1
+    for attempt in range(request_attempts):
+        req = urllib.request.Request(url, data=data, headers=request_headers, method=request_method)
         try:
-            payload = json.loads(exc.read().decode('utf-8'))
-        except Exception:
-            payload = {'status': 'error', 'message': str(exc)}
-        payload.setdefault('_http_status', exc.code)
-        raise CloudAPIError(payload.get('message') or payload.get('error') or str(exc), status_code=exc.code, payload=payload) from exc
-    except urllib.error.URLError as exc:
-        reason = getattr(exc, 'reason', exc)
-        raise CloudAPIError(f'无法连接云端服务：{reason}', status_code=502) from exc
-    except Exception as exc:
-        raise CloudAPIError(f'无法连接云端服务：{exc}', status_code=502) from exc
+            with urllib.request.urlopen(req, timeout=timeout, context=_get_ssl_context()) as response:
+                payload = _read_json_response(response)
+                payload.setdefault('_http_status', getattr(response, 'status', 200))
+                return payload
+        except urllib.error.HTTPError as exc:
+            try:
+                payload = json.loads(exc.read().decode('utf-8'))
+            except Exception:
+                payload = {'status': 'error', 'message': str(exc)}
+            payload.setdefault('_http_status', exc.code)
+            raise CloudAPIError(payload.get('message') or payload.get('error') or str(exc), status_code=exc.code, payload=payload) from exc
+        except urllib.error.URLError as exc:
+            if attempt + 1 < request_attempts and _is_transient_request_error(exc):
+                time.sleep(0.25 * (2 ** attempt))
+                continue
+            reason = getattr(exc, 'reason', exc)
+            raise CloudAPIError(f'无法连接云端服务：{reason}', status_code=502) from exc
+        except (ssl.SSLEOFError, ConnectionResetError, TimeoutError, socket.timeout, http.client.RemoteDisconnected) as exc:
+            if attempt + 1 < request_attempts:
+                time.sleep(0.25 * (2 ** attempt))
+                continue
+            raise CloudAPIError(f'无法连接云端服务：{exc}', status_code=502) from exc
+        except Exception as exc:
+            raise CloudAPIError(f'无法连接云端服务：{exc}', status_code=502) from exc
 
 
 def _normalize_cloud_path(path):
