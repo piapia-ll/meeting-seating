@@ -304,6 +304,26 @@ document.addEventListener('DOMContentLoaded', () => {
     const applySelectedBtn = document.getElementById('applySelected');
     const clearSelectedBtn = document.getElementById('clearSelected');
 
+    document.querySelectorAll('.meeting-seat-action[data-meeting-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const seats = Array.from(selectedSeats).map(key =>
+                document.querySelector(`.seat[data-seat-key="${key}"]`)
+            ).filter(Boolean);
+            if (!seats.length) {
+                notify('请先在会场中选择一个或多个座位');
+                return;
+            }
+            const meetingAction = btn.dataset.meetingAction;
+            Promise.all(seats.map(seat => postJson({
+                row: seat.dataset.row,
+                col: seat.dataset.col,
+                meeting_action: meetingAction
+            }))).then(() => {
+                window.location.reload();
+            }).catch(() => notify('会务座位设置失败'));
+        });
+    });
+
     const postHistoryAction = (url, label) => {
         if (!url) return;
         fetch(url, {
