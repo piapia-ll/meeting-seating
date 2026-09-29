@@ -51,9 +51,13 @@
                 <div class="seat cell-{{ seat.cell_type }}{% if seat.cell_type == 'seat' and seat.student %} has-preview-student{% endif %}"
                     data-row="{{ seat.row }}"
                     data-col="{{ seat.col }}"
-                    data-cell-type="{{ seat.cell_type }}">
+                    data-cell-type="{{ seat.cell_type }}"
+                    data-venue-role="{{ seat.venue_role }}"
+                    data-meeting-status="{{ seat.meeting_status }}">
                     {% if seat.cell_type == 'seat' %}
                     <div class="seat-placeholder">{{ seat.row }}-{{ seat.col }}</div>
+                    {% if seat.venue_role == 'stage' %}<div class="seat-preview-info">主席台席</div>{% endif %}
+                    {% if seat.meeting_status == 'skip' %}<div class="seat-preview-info">⊘ 跳过</div>{% elif seat.meeting_status == 'locked' %}<div class="seat-preview-info">🔒 锁定</div>{% endif %}
                     {% if seat.student %}
                     <div class="seat-preview" aria-hidden="true">
                         <div class="seat-preview-name">{{ seat.student.name }}</div>
@@ -76,8 +80,8 @@
     <aside class="side-panel">
         <div class="panel-card">
             <div class="panel-header">
-                <h3>基础布局</h3>
-                <span class="panel-meta">仅编辑座位/走廊/讲台</span>
+                <h3>会场基础布局</h3>
+                <span class="panel-meta">座位 / 走廊 / 主席台区域</span>
             </div>
             <form method="post" action="{% url 'update_layout_grid' classroom.pk %}" class="stack-form">
                 {% csrf_token %}
@@ -87,7 +91,21 @@
                     <button type="submit" class="btn btn-primary">更新网格</button>
                 </div>
             </form>
-            <div class="panel-note">右键座位可快速设置类型，顶部“打开预览”可低透明度查看当前学生。</div>
+            <div class="panel-note">先编辑物理布局，再用“会务座位”标记主席台席、普通席和临时跳过/锁定。后续会议模块会把临时状态改为按会议保存。</div>
+        </div>
+
+        <div class="panel-card">
+            <div class="panel-header">
+                <h3>会务座位</h3>
+                <span class="panel-meta">应用到当前选中座位</span>
+            </div>
+            <div class="tool-grid meeting-tool-grid">
+                <button type="button" class="btn btn-secondary meeting-seat-action" data-meeting-action="audience">设为普通席</button>
+                <button type="button" class="btn btn-secondary meeting-seat-action" data-meeting-action="stage">设为主席台席</button>
+                <button type="button" class="btn btn-secondary meeting-seat-action" data-meeting-action="skip">⊘ 跳过</button>
+                <button type="button" class="btn btn-secondary meeting-seat-action" data-meeting-action="locked">🔒 锁定</button>
+                <button type="button" class="btn btn-secondary meeting-seat-action" data-meeting-action="normal">恢复参与排座</button>
+            </div>
         </div>
 
         <div class="panel-card">
