@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% block title %}会场排排座{% endblock %}
+{% block content %}<div class="classroom-layout"><section class="panel-card"><h2>会议</h2>
+<form method="post" action="{% url 'meeting_create' %}">{% csrf_token %}
+<input name="name" required placeholder="会议名称"><input type="date" name="meeting_date">
+<select name="venue_id" required><option value="">选择会场</option>{% for v in venues %}<option value="{{v.id}}">{{v.name}}</option>{% endfor %}</select>
+<label><input type="checkbox" name="use_stage"> 使用主席台</label>
+<select name="stage_mode"><option value="specified">指定主席台人员</option><option value="auto">自动</option></select>
+<h4>参会人员</h4>{% for p in participants %}<label style="display:inline-block;margin:4px 12px 4px 0"><input type="checkbox" name="participant_ids" value="{{p.id}}"> {{p.name}}{% if p.department %}（{{p.department.name}}）{% endif %}</label>{% empty %}<p>请先添加人员。</p>{% endfor %}
+<button class="btn btn-primary">创建会议</button></form>
+<hr>{% for m in meetings %}<p><a href="{% url 'meeting_detail' m.id %}">{{m.name}}</a> · {{m.meeting_date|default:"未填写日期"}} · {{m.venue.name}}</p>{% endfor %}</section>
+<aside class="side-panel"><div class="panel-card"><h3>行政级别</h3><form method="post" action="{% url 'level_create' %}">{% csrf_token %}<input name="name" required placeholder="级别名称"><input name="order" type="number" value="100"><button class="btn">添加</button></form></div>
+<div class="panel-card"><h3>警种部门</h3><form method="post" action="{% url 'department_create' %}">{% csrf_token %}<input name="name" required placeholder="部门全称"><input name="short_name" placeholder="桌牌名称"><input name="order" type="number" value="100"><button class="btn">添加</button></form></div>
+<div class="panel-card"><h3>人员</h3><form method="post" action="{% url 'participant_create' %}">{% csrf_token %}<input name="name" required placeholder="姓名"><select name="category"><option value="bureau_leader">局领导</option><option value="attendee">列席人员</option><option value="department" selected>警种部门人员</option></select><select name="level_id"><option value="">行政级别</option>{% for x in levels %}<option value="{{x.id}}">{{x.name}}</option>{% endfor %}</select><select name="department_id"><option value="">警种部门</option>{% for x in departments %}<option value="{{x.id}}">{{x.name}}</option>{% endfor %}</select><input name="position" placeholder="职务"><input name="leader_order" type="number" value="100" title="局领导顺序"><input name="attendee_order" type="number" value="100" title="列席顺序"><button class="btn">添加人员</button></form></div></aside></div>{% endblock %}
