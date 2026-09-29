@@ -19,7 +19,7 @@ def audience_column_priority(cols):
         for d in range(1, center+1): out += [center-d, center+d]
         return out
     right=cols//2; left=right-1; out=[]
-    for d in range(cols//2): out += [right-1-d, right+d]
+    for d in range(cols//2): out += [right+d, left-d]
     return out
 
 def stage_column_priority(cols):
@@ -71,8 +71,11 @@ def auto_assign(meeting):
     stage_seats=[s for s in all_seats if s.venue_role=='stage' and s.meeting_status!='skip']
     audience_seats=[s for s in all_seats if s.venue_role!='stage' and s.meeting_status!='skip']
     if not meeting.use_stage:
-        audience_seats += stage_seats
+        # 本次会议不使用主席台时，主席台物理座位不参与观众席排座。
         stage_seats=[]
+
+    # 先释放所有非锁定、非跳过的旧分配，避免人员换座时触发唯一约束。
+    MeetingSeatAssignment.objects.filter(meeting=meeting, locked=False, skipped=False).update(participant=None, sort_order=0)
 
     def fill(seats, people, is_stage):
         available=[s for s in ordered_seats(seats, stage=is_stage)
