@@ -21,6 +21,11 @@ class MeetingSeatStatus(models.TextChoices):
     LOCKED = 'locked', '锁定座位'
 
 
+class VenueSeatRole(models.TextChoices):
+    AUDIENCE = 'audience', '普通席'
+    STAGE = 'stage', '主席台席'
+
+
 class ClassroomGroup(models.Model):
     name = models.CharField(max_length=100, verbose_name="班级组名称")
     uuid = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, verbose_name="班级组 UUID")
@@ -411,6 +416,13 @@ class Seat(models.Model):
         default=MeetingSeatStatus.NORMAL,
         verbose_name="会务座位状态",
         help_text="正常参与排座、跳过，或锁定。V1 阶段先保存到会场座位，后续会议模块会覆盖为会议级状态。",
+    )
+    venue_role = models.CharField(
+        max_length=16,
+        choices=VenueSeatRole.choices,
+        default=VenueSeatRole.AUDIENCE,
+        verbose_name="会场座位用途",
+        help_text="会场模板中的普通席/主席台席标记。",
     )
 
     class Meta:
