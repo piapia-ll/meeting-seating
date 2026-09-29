@@ -38,11 +38,12 @@
                             <rect x="14" y="14" width="7" height="7" rx="2" fill="currentColor" />
                         </svg>
                         <div class="logo-meta">
-                            <span>不想排座位</span>
-                            <small>教室排座工作区</small>
+                            <span>会场排排座</span>
+                            <small>会议座次工作区</small>
                         </div>
                     </a>
                     <div class="ribbon-tab-strip">
+                        <a class="ribbon-tab" href="{% url 'meeting_home' %}">会议排座</a>
                         {% block ribbon_tabs %}
                         <button type="button" class="ribbon-tab active" data-ribbon-tab="home">开始</button>
                         {% endblock %}
