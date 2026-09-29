@@ -623,3 +623,96 @@ class PluginRuntimeKV(models.Model):
         indexes = [
             models.Index(fields=['plugin_id', 'namespace'], name='plugin_runtime_ns_idx'),
         ]
+
+
+# ===== 会场排排座 V1 业务模型 =====
+class ParticipantCategory(models.TextChoices):
+    BUREAU_LEADER = 'bureau_leader', '局领导'
+    ATTENDEE = 'attendee', '列席人员'
+    DEPARTMENT = 'department', '警种部门'
+
+
+class PersonnelLevel(models.Model):
+    name = models.CharField(max_length=80, unique=True, verbose_name='行政级别')
+    order = models.PositiveIntegerField(default=100, db_index=True, verbose_name='排序')
+    active = models.BooleanField(default=True, verbose_name='启用')
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = '行政级别'
+        verbose_name_plural = verbose_name
+    def __str__(self): return self.name
+
+
+class PoliceDepartment(models.Model):
+    name = models.CharField(max_length=120, unique=True, verbose_name='警种部门')
+    short_name = models.CharField(max_length=80, blank=True, default='', verbose_name='桌牌名称')
+    order = models.PositiveIntegerField(default=100, db_index=True, verbose_name='警种排序')
+    active = models.BooleanField(default=True, verbose_name='启用')
+    class Meta:
+        ordering = ['order', 'id']
+        verbose_name = '警种部门'
+        verbose_name_plural = verbose_name
+    @property
+    def desk_card_name(self): return self.short_name or self.name
+    def __str__(self): return self.name
+
+
+class Participant(models.Model):
+    name = models.CharField(max_length=80, verbose_name='姓名')
+    category = models.CharField(max_length=24, choices=ParticipantCategory.choices, default=ParticipantCategory.DEPARTMENT, db_index=True, verbose_name='人员类别')
+    department = models.ForeignKey(PoliceDepartment, on_delete=models.SET_NULL, null=True, blank=True, related_name='participants', verbose_name='警种部门')
+    personnel_level = models.ForeignKey(PersonnelLevel, on_delete=models.SET_NULL, null=True, blank=True, related_name='participants', verbose_name='行政级别')
+    position = models.CharField(max_length=120, blank=True, default='', verbose_name='职务')
+    leader_order = models.PositiveIntegerField(default=100, verbose_name='局领导顺序')
+    attendee_order = models.PositiveIntegerField(default=100, verbose_name='列席顺序')
+    personal_order = models.PositiveIntegerField(default=100, verbose_name='同条件个人顺序')
+    active = models.BooleanField(default=True, verbose_name='启用')
+    remark = models.CharField(max_length=255, blank=True, default='', verbose_name='备注')
+    class Meta:
+        ordering = ['id']
+        verbose_name = '参会人员'
+        verbose_name_plural = verbose_name
+    @property
+    def desk_card_text(self):
+        if self.category == ParticipantCategory.DEPARTMENT and self.department:
+            return self.department.desk_card_name
+        return self.name
+    def __str__(self): return self.name
+
+
+class Meeting(models.Model):
+    name = models.CharField(max_length=160, verbose_name='会议名称')
+    meeting_date = models.DateField(null=True, blank=True, verbose_name='会议日期')
+    venue = models.ForeignKey(Classroom, on_delete=models.PROTECT, related_name='meetings', verbose_name='会场')
+    participants = models.ManyToManyField(Participant, through='MeetingParticipant', related_name='meetings')
+    use_stage = models.BooleanField(default=False, verbose_name='使用主席台')
+    stage_mode = models.CharField(max_length=16, choices=[('auto','自动'),('specified','指定')], default='specified', verbose_name='主席台人员方式')
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering = ['-meeting_date', '-id']
+        verbose_name = '会议'
+        verbose_name_plural = verbose_name
+    def __str__(self): return self.name
+
+
+class MeetingParticipant(models.Model):
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name='meeting_participants')
+    participant = models.ForeignKey(Participant, on_delete=models.PROTECT, related_name='meeting_participations')
+    is_stage = models.BooleanField(default=False, verbose_name='主席台人员')
+    include = models.BooleanField(default=True, verbose_name='参加本次会议')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['meeting','participant'], name='unique_meeting_participant')]
+
+
+class MeetingSeatAssignment(models.Model):
+    meeting = models.ForeignKey(Meeting, on_delete=models.CASCADE, related_name='assignments')
+    seat = models.ForeignKey(Seat, on_delete=models.PROTECT, related_name='meeting_assignments')
+    participant = models.ForeignKey(Participant, on_delete=models.PROTECT, null=True, blank=True, related_name='seat_assignments')
+    locked = models.BooleanField(default=False, verbose_name='锁定')
+    skipped = models.BooleanField(default=False, verbose_name='跳过')
+    sort_order = models.PositiveIntegerField(default=0, verbose_name='排座序号')
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['meeting','seat'], name='unique_meeting_seat'),
+            models.UniqueConstraint(fields=['meeting','participant'], condition=models.Q(participant__isnull=False), name='unique_meeting_person_seat'),
+        ]
