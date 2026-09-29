@@ -17945,3 +17945,48 @@ def department_create(request):
 def level_create(request):
     PersonnelLevel.objects.create(name=request.POST['name'].strip(),order=int(request.POST.get('order') or 100))
     return redirect('meeting_home')
+
+
+@require_POST
+def meeting_participant_state(request, pk, participant_id):
+    meeting=get_object_or_404(Meeting, pk=pk)
+    mp=get_object_or_404(MeetingParticipant, meeting=meeting, participant_id=participant_id)
+    action=request.POST.get('action')
+    if action=='stage' and meeting.use_stage:
+        mp.is_stage=True
+    elif action=='audience':
+        mp.is_stage=False
+    elif action=='exclude':
+        mp.include=False
+    elif action=='include':
+        mp.include=True
+    mp.save(update_fields=['is_stage','include'])
+    return redirect('meeting_detail', pk=pk)
+
+@require_POST
+def meeting_swap_seats(request, pk):
+    meeting=get_object_or_404(Meeting, pk=pk)
+    a=get_object_or_404(MeetingSeatAssignment, meeting=meeting, seat_id=request.POST.get('seat_a'))
+    b=get_object_or_404(MeetingSeatAssignment, meeting=meeting, seat_id=request.POST.get('seat_b'))
+    if a.locked or b.locked or a.skipped or b.skipped:
+        return JsonResponse({'ok':False,'error':'锁定或跳过座位不能交换'},status=400)
+    pa,pb=a.participant,b.participant
+    a.participant=None; a.save(update_fields=['participant'])
+    b.participant=None; b.save(update_fields=['participant'])
+    a.participant=pb; b.participant=pa
+    a.save(update_fields=['participant']); b.save(update_fields=['participant'])
+    return JsonResponse({'ok':True})
+
+def meeting_print_cards(request, pk):
+    meeting=get_object_or_404(Meeting, pk=pk)
+    assigned=meeting.assignments.select_related('participant__department').exclude(participant=None).order_by('sort_order')
+    cards=[]; seen_departments=set()
+    for a in assigned:
+        p=a.participant
+        if p.category == ParticipantCategory.DEPARTMENT and p.department_id:
+            if p.department_id in seen_departments: continue
+            seen_departments.add(p.department_id)
+            cards.append({'text':p.desk_card_text,'kind':'small','person':p})
+        else:
+            cards.append({'text':p.desk_card_text,'kind':'large','person':p})
+    return render(request,'seats/meeting_cards.html',{'meeting':meeting,'cards':cards})
