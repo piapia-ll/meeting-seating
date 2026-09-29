@@ -12901,9 +12901,28 @@ def update_cell_type(request, pk):
         row = int(data.get('row'))
         col = int(data.get('col'))
         cell_type = data.get('cell_type')
-        if cell_type not in [c.value for c in SeatCellType]:
+        meeting_action = str(data.get('meeting_action') or '').strip()
+        if cell_type is not None and cell_type not in [c.value for c in SeatCellType]:
             return JsonResponse({'status': 'error', 'message': '类型不合法'}, status=400)
+        if meeting_action not in ('', 'audience', 'stage', 'normal', 'skip', 'locked'):
+            return JsonResponse({'status': 'error', 'message': '会务座位操作不合法'}, status=400)
         seat = get_object_or_404(Seat, classroom=classroom, row=row, col=col)
+        if meeting_action:
+            before_state = _capture_history_state(classroom)
+            update_fields = []
+            if meeting_action in ('audience', 'stage'):
+                seat.venue_role = meeting_action
+                seat.meeting_zone = meeting_action
+                update_fields.extend(['venue_role', 'meeting_zone'])
+            else:
+                seat.meeting_status = meeting_action
+                update_fields.append('meeting_status')
+            seat.save(update_fields=update_fields)
+            _push_snapshot_action(
+                request, classroom, before_state, 'meeting_seat_meta',
+                extra={'row': seat.row, 'col': seat.col, 'meeting_action': meeting_action},
+            )
+            return JsonResponse({'status': 'success'})
         action = {
             'type': 'cell_type',
             'row': seat.row,
