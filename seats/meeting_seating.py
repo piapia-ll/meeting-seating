@@ -49,10 +49,18 @@ def auto_assign(meeting):
     members=[mp for mp in meeting.meeting_participants.select_related(
         'participant__personnel_level','participant__department'
     ) if mp.include]
-    stage_people=[mp.participant for mp in members if meeting.use_stage and mp.is_stage]
-    audience_people=[mp.participant for mp in members if mp.participant not in stage_people]
-    stage_people.sort(key=participant_sort_key)
-    audience_people.sort(key=participant_sort_key)
+    ranked=sorted([mp.participant for mp in members], key=participant_sort_key)
+    if meeting.use_stage and meeting.stage_mode == 'specified':
+        stage_ids={mp.participant_id for mp in members if mp.is_stage}
+        stage_people=[p for p in ranked if p.id in stage_ids]
+        audience_people=[p for p in ranked if p.id not in stage_ids]
+    elif meeting.use_stage:
+        stage_capacity=sum(1 for s in meeting.venue.seats.all() if s.venue_role=='stage' and s.cell_type=='seat' and s.meeting_status!='skip')
+        stage_people=ranked[:stage_capacity]
+        audience_people=ranked[stage_capacity:]
+    else:
+        stage_people=[]
+        audience_people=ranked
 
     existing={a.seat_id:a for a in meeting.assignments.select_related('seat','participant')}
     locked_person_ids={a.participant_id for a in existing.values() if a.locked and a.participant_id}
