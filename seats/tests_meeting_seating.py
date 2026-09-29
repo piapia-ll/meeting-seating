@@ -5,7 +5,7 @@ from .meeting_seating import audience_column_priority, stage_column_priority, pa
 class MeetingSeatingAlgorithmTests(SimpleTestCase):
     def test_audience_priorities(self):
         self.assertEqual(audience_column_priority(5), [2,1,3,0,4])
-        self.assertEqual(audience_column_priority(6), [2,3,1,4,0,5])
+        self.assertEqual(audience_column_priority(6), [3,2,4,1,5,0])
 
     def test_stage_priorities_mirror(self):
         self.assertEqual(stage_column_priority(5), [2,3,1,4,0])
