@@ -4,10 +4,21 @@ from django.db import models
 
 
 class SeatCellType(models.TextChoices):
-    SEAT = 'seat', '座位'
+    SEAT = 'seat', '普通席'
     AISLE = 'aisle', '走廊'
-    PODIUM = 'podium', '讲台'
+    PODIUM = 'podium', '主席台'
     EMPTY = 'empty', '空位'
+
+
+class MeetingSeatZone(models.TextChoices):
+    AUDIENCE = 'audience', '普通席'
+    STAGE = 'stage', '主席台'
+
+
+class MeetingSeatStatus(models.TextChoices):
+    NORMAL = 'normal', '参与自动排座'
+    SKIP = 'skip', '本次跳过'
+    LOCKED = 'locked', '锁定座位'
 
 
 class ClassroomGroup(models.Model):
@@ -30,7 +41,7 @@ class ClassroomGroup(models.Model):
 
 
 class Classroom(models.Model):
-    name = models.CharField(max_length=100, verbose_name="班级/教室名称")
+    name = models.CharField(max_length=100, verbose_name="会场名称")
     rows = models.IntegerField(default=6, verbose_name="行数")
     cols = models.IntegerField(default=8, verbose_name="列数")
     classroom_group = models.ForeignKey(
@@ -82,7 +93,7 @@ class Classroom(models.Model):
         Seat.objects.bulk_create(seats_to_create)
 
     class Meta:
-        verbose_name = "班级"
+        verbose_name = "会场"
         verbose_name_plural = verbose_name
 
 
@@ -387,6 +398,20 @@ class Seat(models.Model):
     student = models.OneToOneField(Student, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_seat', verbose_name="入座学生")
     cell_type = models.CharField(max_length=10, choices=SeatCellType.choices, default=SeatCellType.SEAT, verbose_name="单元类型")
     group = models.ForeignKey(SeatGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='seats', verbose_name="所属小组")
+    meeting_zone = models.CharField(
+        max_length=16,
+        choices=MeetingSeatZone.choices,
+        default=MeetingSeatZone.AUDIENCE,
+        verbose_name="会务区域",
+        help_text="普通席或主席台。与原布局单元类型分开保存，便于逐步兼容原编辑器。",
+    )
+    meeting_status = models.CharField(
+        max_length=16,
+        choices=MeetingSeatStatus.choices,
+        default=MeetingSeatStatus.NORMAL,
+        verbose_name="会务座位状态",
+        help_text="正常参与排座、跳过，或锁定。V1 阶段先保存到会场座位，后续会议模块会覆盖为会议级状态。",
+    )
 
     class Meta:
         unique_together = ('classroom', 'row', 'col')
