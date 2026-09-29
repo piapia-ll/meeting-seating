@@ -38,6 +38,8 @@ from .models import (
     SyncMeta,
     OnboardingState,
     SortStrategy,
+    PersonnelLevel, PoliceDepartment, Participant, ParticipantCategory,
+    Meeting, MeetingParticipant, MeetingSeatAssignment,
 )
 from .sorting import (
     definition_for_field,
@@ -17858,3 +17860,88 @@ def realtime_status(request):
         'status': 'success',
         'realtime': realtime.snapshot(),
     })
+
+
+# ===== 会场排排座 V1 页面 =====
+def meeting_home(request):
+    return render(request, 'seats/meeting_home.html', {
+        'meetings': Meeting.objects.select_related('venue').all()[:100],
+        'venues': Classroom.objects.all().order_by('name'),
+        'participants': Participant.objects.select_related('department','personnel_level').filter(active=True),
+        'levels': PersonnelLevel.objects.filter(active=True),
+        'departments': PoliceDepartment.objects.filter(active=True),
+    })
+
+@require_POST
+def meeting_create(request):
+    venue=get_object_or_404(Classroom, pk=request.POST.get('venue_id'))
+    meeting=Meeting.objects.create(
+        name=(request.POST.get('name') or '未命名会议').strip(),
+        meeting_date=request.POST.get('meeting_date') or None,
+        venue=venue,
+        use_stage=request.POST.get('use_stage')=='on',
+        stage_mode=request.POST.get('stage_mode') or 'specified',
+    )
+    ids=request.POST.getlist('participant_ids')
+    for p in Participant.objects.filter(id__in=ids):
+        MeetingParticipant.objects.create(meeting=meeting, participant=p)
+    return redirect('meeting_detail', pk=meeting.pk)
+
+def meeting_detail(request, pk):
+    meeting=get_object_or_404(Meeting.objects.select_related('venue'), pk=pk)
+    members=list(meeting.meeting_participants.select_related('participant__department','participant__personnel_level'))
+    from .meeting_seating import participant_sort_key
+    preview=sorted([m.participant for m in members if m.include], key=participant_sort_key)
+    assignments={a.seat_id:a for a in meeting.assignments.select_related('participant','seat')}
+    grid=[]
+    for r in range(1, meeting.venue.rows+1):
+        row=[]
+        for col in range(1, meeting.venue.cols+1):
+            seat=next((s for s in meeting.venue.seats.all() if s.row==r and s.col==col),None)
+            row.append((seat, assignments.get(seat.id) if seat else None))
+        grid.append(row)
+    return render(request,'seats/meeting_detail.html',{'meeting':meeting,'preview':preview,'grid':grid})
+
+@require_POST
+def meeting_arrange(request, pk):
+    meeting=get_object_or_404(Meeting, pk=pk)
+    from .meeting_seating import auto_assign
+    auto_assign(meeting)
+    return redirect('meeting_detail', pk=pk)
+
+@require_POST
+def meeting_seat_state(request, pk, seat_id):
+    meeting=get_object_or_404(Meeting, pk=pk)
+    seat=get_object_or_404(Seat, pk=seat_id, classroom=meeting.venue)
+    action=request.POST.get('action')
+    assignment,_=MeetingSeatAssignment.objects.get_or_create(meeting=meeting,seat=seat)
+    if action=='lock': assignment.locked=True
+    elif action=='unlock': assignment.locked=False
+    elif action=='skip': assignment.skipped=True; assignment.participant=None
+    elif action=='unskip': assignment.skipped=False
+    assignment.save()
+    return redirect('meeting_detail',pk=pk)
+
+@require_POST
+def participant_create(request):
+    Participant.objects.create(
+        name=(request.POST.get('name') or '').strip(),
+        category=request.POST.get('category') or ParticipantCategory.DEPARTMENT,
+        department=PoliceDepartment.objects.filter(pk=request.POST.get('department_id') or None).first(),
+        personnel_level=PersonnelLevel.objects.filter(pk=request.POST.get('level_id') or None).first(),
+        position=(request.POST.get('position') or '').strip(),
+        leader_order=int(request.POST.get('leader_order') or 100),
+        attendee_order=int(request.POST.get('attendee_order') or 100),
+        personal_order=int(request.POST.get('personal_order') or 100),
+    )
+    return redirect('meeting_home')
+
+@require_POST
+def department_create(request):
+    PoliceDepartment.objects.create(name=request.POST['name'].strip(),short_name=(request.POST.get('short_name') or '').strip(),order=int(request.POST.get('order') or 100))
+    return redirect('meeting_home')
+
+@require_POST
+def level_create(request):
+    PersonnelLevel.objects.create(name=request.POST['name'].strip(),order=int(request.POST.get('order') or 100))
+    return redirect('meeting_home')
