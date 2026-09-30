@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% block title %}桌牌 - {{meeting.name}}{% endblock %}
+{% extends 'seats/meeting_base.html' %}{% block title %}桌牌 - {{meeting.name}}{% endblock %}
 {% block actions %}<a class="btn btn-secondary" href="{% url 'meeting_detail' meeting.id %}">返回</a><button class="btn btn-primary" onclick="window.print()">打印桌牌</button>{% endblock %}
 {% block content %}<div class="card-toolbar"><h2>{{meeting.name}} · 桌牌</h2><p>局领导/列席默认大桌牌打印姓名；普通警种部门默认小桌牌打印部门桌牌名。同部门多人默认合并一张。</p></div>
 <div class="print-cards">{% for c in cards %}<div class="desk-card {{c.kind}}"><div class="card-face">{{c.text}}</div></div>{% empty %}<p>请先完成排座。</p>{% endfor %}</div>
