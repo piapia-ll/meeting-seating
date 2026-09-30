@@ -17990,3 +17990,75 @@ def meeting_print_cards(request, pk):
         else:
             cards.append({'text':p.desk_card_text,'kind':'large','person':p})
     return render(request,'seats/meeting_cards.html',{'meeting':meeting,'cards':cards})
+
+
+@require_POST
+def participant_update(request, participant_id):
+    p=get_object_or_404(Participant, pk=participant_id)
+    p.name=(request.POST.get('name') or p.name).strip()
+    p.category=request.POST.get('category') or p.category
+    p.department=PoliceDepartment.objects.filter(pk=request.POST.get('department_id') or None).first()
+    p.personnel_level=PersonnelLevel.objects.filter(pk=request.POST.get('level_id') or None).first()
+    p.position=(request.POST.get('position') or '').strip()
+    p.leader_order=int(request.POST.get('leader_order') or 100)
+    p.attendee_order=int(request.POST.get('attendee_order') or 100)
+    p.personal_order=int(request.POST.get('personal_order') or 100)
+    p.active=request.POST.get('active')=='on'
+    p.remark=(request.POST.get('remark') or '').strip()
+    p.save()
+    return redirect('meeting_home')
+
+@require_POST
+def participant_toggle(request, participant_id):
+    p=get_object_or_404(Participant, pk=participant_id)
+    p.active=not p.active; p.save(update_fields=['active'])
+    return redirect('meeting_home')
+
+@require_POST
+def meeting_update(request, pk):
+    meeting=get_object_or_404(Meeting, pk=pk)
+    meeting.name=(request.POST.get('name') or meeting.name).strip()
+    meeting.meeting_date=request.POST.get('meeting_date') or None
+    meeting.use_stage=request.POST.get('use_stage')=='on'
+    meeting.stage_mode=request.POST.get('stage_mode') or 'specified'
+    meeting.save()
+    wanted={int(x) for x in request.POST.getlist('participant_ids') if x.isdigit()}
+    existing={x.participant_id:x for x in meeting.meeting_participants.all()}
+    for pid,mp in existing.items(): mp.include=pid in wanted; mp.save(update_fields=['include'])
+    for pid in wanted-existing.keys():
+        MeetingParticipant.objects.create(meeting=meeting,participant_id=pid)
+    return redirect('meeting_detail',pk=pk)
+
+@require_POST
+def meeting_delete(request, pk):
+    meeting=get_object_or_404(Meeting, pk=pk); meeting.delete()
+    return redirect('meeting_home')
+
+def participants_export(request):
+    wb=openpyxl.Workbook(); ws=wb.active; ws.title='人员库'
+    ws.append(['姓名','人员类别','行政级别','警种部门','职务','局领导顺序','列席顺序','部门内顺序','启用','备注'])
+    for p in Participant.objects.select_related('department','personnel_level').all():
+        ws.append([p.name,p.get_category_display(),p.personnel_level.name if p.personnel_level else '',p.department.name if p.department else '',p.position,p.leader_order,p.attendee_order,p.personal_order,'是' if p.active else '否',p.remark])
+    out=BytesIO(); wb.save(out)
+    resp=HttpResponse(out.getvalue(),content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition']="attachment; filename=participants.xlsx"
+    return resp
+
+@require_POST
+def participants_import(request):
+    f=request.FILES.get('file')
+    if not f: return redirect('meeting_home')
+    wb=openpyxl.load_workbook(f,data_only=True); ws=wb.active
+    category_map={'局领导':ParticipantCategory.BUREAU_LEADER,'列席人员':ParticipantCategory.ATTENDEE,'警种部门':ParticipantCategory.DEPARTMENT,'警种部门人员':ParticipantCategory.DEPARTMENT}
+    for row in ws.iter_rows(min_row=2,values_only=True):
+        if not row or not row[0]: continue
+        vals=list(row)+[None]*10
+        level=PersonnelLevel.objects.filter(name=str(vals[2]).strip()).first() if vals[2] else None
+        dept=PoliceDepartment.objects.filter(name=str(vals[3]).strip()).first() if vals[3] else None
+        Participant.objects.update_or_create(name=str(vals[0]).strip(),department=dept,defaults={
+            'category':category_map.get(str(vals[1]).strip(),ParticipantCategory.DEPARTMENT),
+            'personnel_level':level,'position':str(vals[4] or '').strip(),
+            'leader_order':int(vals[5] or 100),'attendee_order':int(vals[6] or 100),'personal_order':int(vals[7] or 100),
+            'active':str(vals[8] or '是').strip() not in ('否','0','False','false'),'remark':str(vals[9] or '').strip(),
+        })
+    return redirect('meeting_home')
