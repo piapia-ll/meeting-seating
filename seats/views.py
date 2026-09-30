@@ -12,7 +12,7 @@ import base64
 import hashlib
 import desktop_runtime
 import copy
-from app_paths import PROJECT_ROOT, backups_directory, temp_directory, user_plugins_directory
+from app_paths import PROJECT_ROOT, backups_directory, temp_directory, user_plugins_directory, database_path
 from plugin_core import PluginPackageError, PluginPackageManager, fetch_marketplace_index
 from plugin_core.manifest import version_matches
 from .models import (
@@ -18062,3 +18062,54 @@ def participants_import(request):
             'active':str(vals[8] or '是').strip() not in ('否','0','False','false'),'remark':str(vals[9] or '').strip(),
         })
     return redirect('meeting_home')
+
+
+def meeting_print_chart(request, pk):
+    meeting=get_object_or_404(Meeting.objects.select_related('venue'), pk=pk)
+    assignments={a.seat_id:a for a in meeting.assignments.select_related('participant__department','seat')}
+    seats=list(meeting.venue.seats.all())
+    grid=[]
+    for r in range(1,meeting.venue.rows+1):
+        row=[]
+        for col in range(1,meeting.venue.cols+1):
+            seat=next((s for s in seats if s.row==r and s.col==col),None)
+            row.append((seat,assignments.get(seat.id) if seat else None))
+        grid.append(row)
+    paper=request.GET.get('paper','A4') if request.GET.get('paper') in ('A4','A3') else 'A4'
+    orientation=request.GET.get('orientation','landscape')
+    if orientation not in ('landscape','portrait'): orientation='landscape'
+    return render(request,'seats/meeting_print_chart.html',{'meeting':meeting,'grid':grid,'paper':paper,'orientation':orientation})
+
+def local_backup_download(request):
+    import shutil
+    src=database_path()
+    if not src.exists(): raise Http404('数据库不存在')
+    stamp=timezone.localtime().strftime('%Y%m%d-%H%M%S')
+    dest=backups_directory()/f'meeting-seating-{stamp}.sqlite3'
+    shutil.copy2(src,dest)
+    resp=HttpResponse(dest.read_bytes(),content_type='application/octet-stream')
+    resp['Content-Disposition']=f'attachment; filename="{dest.name}"'
+    return resp
+
+@require_POST
+def local_backup_restore(request):
+    import shutil
+    upload=request.FILES.get('file')
+    if not upload: return JsonResponse({'ok':False,'error':'请选择备份文件'},status=400)
+    if upload.size > 1024*1024*1024: return JsonResponse({'ok':False,'error':'备份文件过大'},status=400)
+    target=database_path()
+    safety=backups_directory()/f'before-restore-{timezone.localtime().strftime("%Y%m%d-%H%M%S")}.sqlite3'
+    if target.exists(): shutil.copy2(target,safety)
+    tmp=temp_directory()/'restore.sqlite3'
+    with tmp.open('wb') as out:
+        for chunk in upload.chunks(): out.write(chunk)
+    import sqlite3
+    try:
+        conn=sqlite3.connect(str(tmp)); ok=conn.execute('PRAGMA integrity_check').fetchone()[0]; conn.close()
+        if ok!='ok': raise ValueError(ok)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        return JsonResponse({'ok':False,'error':'不是有效的 SQLite 备份'},status=400)
+    from django.db import connections
+    connections.close_all(); tmp.replace(target)
+    return JsonResponse({'ok':True,'message':'恢复完成，请重新启动程序'})
