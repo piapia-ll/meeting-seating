@@ -74,6 +74,8 @@ def get_platform_name():
 
 
 def is_update_api_supported():
+    if str(os.getenv('FUCKSEATS_OFFLINE_ONLY') or '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+        return False
     if not (is_windows() or is_macos()):
         return False
     return (os.getenv("FUCKSEATS_APP_SHELL") or "").strip().lower() != "browser"
@@ -195,6 +197,8 @@ def add_cache_busting_query(url):
 
 
 def fetch_json(url, timeout=8):
+    if str(os.getenv('FUCKSEATS_OFFLINE_ONLY') or '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+        raise RuntimeError('离线会议版已禁用网络访问。')
     request = urllib.request.Request(
         add_cache_busting_query(url),
         headers={
@@ -282,6 +286,8 @@ def reset_update_state():
 
 
 def download_file(url, destination, timeout=60, progress_callback=None):
+    if str(os.getenv('FUCKSEATS_OFFLINE_ONLY') or '').strip().lower() in {'1', 'true', 'yes', 'on'}:
+        raise RuntimeError('离线会议版已禁用网络下载。')
     destination = Path(destination).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     temp_path = destination.with_suffix(destination.suffix + ".part")
