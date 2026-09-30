@@ -1,7 +1,21 @@
 {% extends 'base.html' %}{% block title %}{{meeting.name}} - 会场排排座{% endblock %}
 {% block actions %}<div class="header-action-row"><a class="btn btn-secondary" href="{% url 'meeting_home' %}">返回会议</a><form method="post" action="{% url 'meeting_arrange' meeting.id %}">{% csrf_token %}<button class="btn btn-primary">确认排序并自动排座</button></form><button class="btn btn-secondary" onclick="window.print()">打印座位图</button><a class="btn btn-secondary" href="/meetings/{{meeting.id}}/cards/">打印桌牌</a></div>{% endblock %}
 {% block content %}<div class="classroom-layout"><section><div class="panel-card"><h2>{{meeting.name}}</h2><p>{{meeting.meeting_date|default:""}} · {{meeting.venue.name}}{% if meeting.use_stage %} · 使用主席台{% endif %}</p></div>
-<section class="seat-stage"><div class="seat-grid">{% for row in grid %}<div class="seat-row">{% for seat,a in row %}{% if seat %}<div class="seat cell-{{seat.cell_type}}" title="{{seat.row}}-{{seat.col}}"><div class="seat-placeholder">{% if a and a.participant %}<strong>{{a.participant.name}}</strong>{% if a.participant.department %}<br><small>{{a.participant.department.name}}</small>{% endif %}{% elif a and a.skipped %}⊘ 跳过{% elif seat.cell_type == 'seat' %}{{seat.row}}-{{seat.col}}{% else %}{{seat.get_cell_type_display}}{% endif %}</div>{% if seat.cell_type == 'seat' %}<form method="post" action="{% url 'meeting_seat_state' meeting.id seat.id %}" style="font-size:11px">{% csrf_token %}{% if a and a.locked %}<button name="action" value="unlock">解锁</button>{% else %}<button name="action" value="lock">锁定</button>{% endif %}{% if a and a.skipped %}<button name="action" value="unskip">恢复</button>{% else %}<button name="action" value="skip">跳过</button>{% endif %}</form>{% endif %}</div>{% endif %}{% endfor %}</div>{% endfor %}</div></section></section>
+<section class="seat-stage"><div class="seat-grid">{% for row in grid %}<div class="seat-row">{% for seat,a in row %}{% if seat %}<div class="seat cell-{{seat.cell_type}} meeting-seat" {% if a %}draggable="true" data-seat-id="{{seat.id}}"{% endif %} title="{{seat.row}}-{{seat.col}}"><div class="seat-placeholder">{% if a and a.participant %}<strong>{{a.participant.name}}</strong>{% if a.participant.department %}<br><small>{{a.participant.department.name}}</small>{% endif %}{% elif a and a.skipped %}⊘ 跳过{% elif seat.cell_type == 'seat' %}{{seat.row}}-{{seat.col}}{% else %}{{seat.get_cell_type_display}}{% endif %}</div>{% if seat.cell_type == 'seat' %}<form method="post" action="{% url 'meeting_seat_state' meeting.id seat.id %}" style="font-size:11px">{% csrf_token %}{% if a and a.locked %}<button name="action" value="unlock">解锁</button>{% else %}<button name="action" value="lock">锁定</button>{% endif %}{% if a and a.skipped %}<button name="action" value="unskip">恢复</button>{% else %}<button name="action" value="skip">跳过</button>{% endif %}</form>{% endif %}</div>{% endif %}{% endfor %}</div>{% endfor %}</div></section></section>
 <aside class="side-panel"><div class="panel-card"><h3>排序预览</h3><p class="panel-note">局领导 → 列席 → 行政级别 → 警种部门 → 部门内顺序</p><ol>{% for p in preview %}<li><strong>{{p.name}}</strong> · {{p.get_category_display}}{% if p.personnel_level %} · {{p.personnel_level.name}}{% endif %}{% if p.department %} · {{p.department.name}}{% endif %}</li>{% empty %}<li>暂无人员</li>{% endfor %}</ol></div>
 <div class="panel-card"><h3>桌牌内容预览</h3>{% for p in preview %}<p>{{p.name}} → <strong>{{p.desk_card_text}}</strong></p>{% endfor %}</div></aside></div>
-<style>@media print{header,.side-panel,form,button{display:none!important}main{margin:0}.classroom-layout{display:block}.seat-stage{box-shadow:none;border:0}}</style>{% endblock %}
+<style>@media print{header,.side-panel,form,button{display:none!important}main{margin:0}.classroom-layout{display:block}.seat-stage{box-shadow:none;border:0}}</style>
+<script>
+let dragSeat=null;
+document.querySelectorAll('.meeting-seat[draggable=true]').forEach(el=>{
+ el.addEventListener('dragstart',()=>dragSeat=el.dataset.seatId);
+ el.addEventListener('dragover',e=>e.preventDefault());
+ el.addEventListener('drop',async e=>{
+  e.preventDefault(); const target=el.dataset.seatId; if(!dragSeat||dragSeat===target)return;
+  const body=new URLSearchParams({seat_a:dragSeat,seat_b:target});
+  const token=document.querySelector('meta[name="csrf-token"]').content;
+  const r=await fetch('/meetings/{{meeting.id}}/swap/',{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body});
+  if(r.ok) location.reload(); else alert((await r.json()).error||'换座失败');
+ });
+});
+</script>{% endblock %}
