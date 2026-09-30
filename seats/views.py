@@ -18117,7 +18117,7 @@ def local_backup_restore(request):
 
 def participant_edit(request, participant_id):
     p=get_object_or_404(Participant,pk=participant_id)
-    return render(request,'seats/participant_edit.html',{'person':p,'levels':PersonnelLevel.objects.all(),'departments':PoliceDepartment.objects.all()})
+    return render(request,'seats/participant_edit.html',{'person':p,'levels':PersonnelLevel.objects.all(),'departments':PoliceDepartment.objects.all(),'category_choices':ParticipantCategory.choices})
 
 def meeting_edit(request, pk):
     meeting=get_object_or_404(Meeting,pk=pk)
