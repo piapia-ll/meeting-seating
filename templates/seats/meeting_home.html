@@ -1,5 +1,5 @@
 {% extends 'base.html' %}{% block title %}会场排排座{% endblock %}
-{% block content %}<div class="classroom-layout"><section class="panel-card"><h2>会议</h2>
+{% block content %}<div class="classroom-layout"><section class="panel-card"><h2>会议</h2><div style="margin-bottom:12px"><a class="btn btn-secondary" href="/meeting-data/backup/">备份本地数据</a><form method="post" enctype="multipart/form-data" action="/meeting-data/restore/" style="display:inline-block">{% csrf_token %}<input type="file" name="file" accept=".sqlite3,.db" required><button class="btn btn-secondary">恢复备份</button></form></div>
 <form method="post" action="{% url 'meeting_create' %}">{% csrf_token %}
 <input name="name" required placeholder="会议名称"><input type="date" name="meeting_date">
 <select name="venue_id" required><option value="">选择会场</option>{% for v in venues %}<option value="{{v.id}}">{{v.name}}</option>{% endfor %}</select>
