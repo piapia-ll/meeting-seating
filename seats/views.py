@@ -17891,7 +17891,8 @@ def meeting_detail(request, pk):
     meeting=get_object_or_404(Meeting.objects.select_related('venue'), pk=pk)
     members=list(meeting.meeting_participants.select_related('participant__department','participant__personnel_level'))
     from .meeting_seating import participant_sort_key
-    preview=sorted([m.participant for m in members if m.include], key=participant_sort_key)
+    preview_members=sorted([m for m in members if m.include], key=lambda m: participant_sort_key(m.participant))
+    preview=[m.participant for m in preview_members]
     assignments={a.seat_id:a for a in meeting.assignments.select_related('participant','seat')}
     grid=[]
     for r in range(1, meeting.venue.rows+1):
@@ -17900,7 +17901,7 @@ def meeting_detail(request, pk):
             seat=next((s for s in meeting.venue.seats.all() if s.row==r and s.col==col),None)
             row.append((seat, assignments.get(seat.id) if seat else None))
         grid.append(row)
-    return render(request,'seats/meeting_detail.html',{'meeting':meeting,'preview':preview,'grid':grid})
+    return render(request,'seats/meeting_detail.html',{'meeting':meeting,'preview':preview,'preview_members':preview_members,'grid':grid})
 
 @require_POST
 def meeting_arrange(request, pk):
@@ -17966,8 +17967,11 @@ def meeting_participant_state(request, pk, participant_id):
 @require_POST
 def meeting_swap_seats(request, pk):
     meeting=get_object_or_404(Meeting, pk=pk)
-    a=get_object_or_404(MeetingSeatAssignment, meeting=meeting, seat_id=request.POST.get('seat_a'))
-    b=get_object_or_404(MeetingSeatAssignment, meeting=meeting, seat_id=request.POST.get('seat_b'))
+    seat_a=get_object_or_404(Seat, pk=request.POST.get('seat_a'), classroom=meeting.venue, cell_type=SeatCellType.SEAT)
+    seat_b=get_object_or_404(Seat, pk=request.POST.get('seat_b'), classroom=meeting.venue, cell_type=SeatCellType.SEAT)
+    if seat_a.pk == seat_b.pk: return JsonResponse({'ok':True})
+    a,_=MeetingSeatAssignment.objects.get_or_create(meeting=meeting, seat=seat_a)
+    b,_=MeetingSeatAssignment.objects.get_or_create(meeting=meeting, seat=seat_b)
     if a.locked or b.locked or a.skipped or b.skipped:
         return JsonResponse({'ok':False,'error':'锁定或跳过座位不能交换'},status=400)
     pa,pb=a.participant,b.participant
