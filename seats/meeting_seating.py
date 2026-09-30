@@ -55,7 +55,8 @@ def auto_assign(meeting):
         stage_people=[p for p in ranked if p.id in stage_ids]
         audience_people=[p for p in ranked if p.id not in stage_ids]
     elif meeting.use_stage:
-        stage_capacity=sum(1 for s in meeting.venue.seats.all() if s.venue_role=='stage' and s.cell_type=='seat' and s.meeting_status!='skip')
+        meeting_skipped_ids=set(meeting.assignments.filter(skipped=True).values_list('seat_id', flat=True))
+        stage_capacity=sum(1 for s in meeting.venue.seats.all() if s.venue_role=='stage' and s.cell_type=='seat' and s.meeting_status!='skip' and s.id not in meeting_skipped_ids)
         stage_people=ranked[:stage_capacity]
         audience_people=ranked[stage_capacity:]
     else:
