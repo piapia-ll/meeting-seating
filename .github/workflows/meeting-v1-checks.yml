@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FUCKSEATS_USE_USER_DATA: "0"
+      FUCKSEATS_DISABLE_DATABASE_ENCRYPTION: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
