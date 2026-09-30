@@ -18113,3 +18113,28 @@ def local_backup_restore(request):
     from django.db import connections
     connections.close_all(); tmp.replace(target)
     return JsonResponse({'ok':True,'message':'恢复完成，请重新启动程序'})
+
+
+def participant_edit(request, participant_id):
+    p=get_object_or_404(Participant,pk=participant_id)
+    return render(request,'seats/participant_edit.html',{'person':p,'levels':PersonnelLevel.objects.all(),'departments':PoliceDepartment.objects.all()})
+
+def meeting_edit(request, pk):
+    meeting=get_object_or_404(Meeting,pk=pk)
+    selected=set(meeting.meeting_participants.filter(include=True).values_list('participant_id',flat=True))
+    people=Participant.objects.select_related('department').filter(active=True)
+    return render(request,'seats/meeting_edit.html',{'meeting':meeting,'participants':people,'selected':selected})
+
+@require_POST
+def department_update(request, department_id):
+    d=get_object_or_404(PoliceDepartment,pk=department_id)
+    d.name=(request.POST.get('name') or d.name).strip(); d.short_name=(request.POST.get('short_name') or '').strip()
+    d.order=int(request.POST.get('order') or 100); d.active=request.POST.get('active')=='on'; d.save()
+    return redirect('meeting_home')
+
+@require_POST
+def level_update(request, level_id):
+    x=get_object_or_404(PersonnelLevel,pk=level_id)
+    x.name=(request.POST.get('name') or x.name).strip(); x.order=int(request.POST.get('order') or 100)
+    x.active=request.POST.get('active')=='on'; x.save()
+    return redirect('meeting_home')
