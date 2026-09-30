@@ -152,6 +152,8 @@ def main():
 
     app_lock = application_lock().acquire()
     os.environ['FUCKSEATS_APP_SHELL'] = 'browser' if dev_mode else 'webview'
+    # 会场排排座桌面版默认严格离线：禁用远程更新入口及任何更新清单访问。
+    os.environ.setdefault('FUCKSEATS_OFFLINE_ONLY', '1')
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
     logging.getLogger('waitress').setLevel(logging.ERROR)
     try:
