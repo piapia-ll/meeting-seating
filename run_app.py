@@ -10,9 +10,6 @@ from io import StringIO
 from django.core.management import call_command
 from waitress import serve
 from desktop_runtime import (
-    is_process_elevated,
-    is_windows,
-    relaunch_self_as_admin,
 )
 
 HOST = '127.0.0.1'
@@ -105,7 +102,7 @@ def _start_desktop_window(url):
 
     bridge = DesktopBridge(url)
     window = webview.create_window(
-        '不想排座位',
+        '会场排排座',
         url,
         js_api=bridge,
         width=1440,
@@ -128,26 +125,8 @@ def _start_desktop_window(url):
         raise RuntimeError(f'启动 WebView 失败：{exc}') from exc
 
 
-def _ensure_windows_admin(entry_script, dev_mode):
-    if not is_windows() or dev_mode:
-        return False
-
-    if is_process_elevated():
-        return False
-
-    print('检测到 Windows 桌面端尚未获得管理员权限，正在重新申请管理员权限...', flush=True)
-    try:
-        relaunch_self_as_admin(entry_script)
-    except Exception as exc:
-        print(f'管理员权限申请失败，本次启动已取消：{exc}', file=sys.stderr, flush=True)
-    return True
-
-
 def main():
     dev_mode = _is_dev_mode(sys.argv)
-    if _ensure_windows_admin(__file__, dev_mode):
-        return
-
     from database_security import application_lock, prepare_desktop_database
 
     app_lock = application_lock().acquire()
@@ -182,13 +161,13 @@ def main():
         except Exception as exc:
             raise RuntimeError(f"数据库迁移失败，应用已停止启动：{exc}") from exc
 
-        app_url = f'http://{HOST}:{PORT}'
+        app_url = f'http://{HOST}:{PORT}/meetings/'
 
         server_thread = threading.Thread(
             target=_start_waitress,
             args=(application,),
             daemon=True,
-            name='fuckseats-waitress',
+            name='meeting-seating-waitress',
         )
         server_thread.start()
         _wait_for_server_ready(app_url)
