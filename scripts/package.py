@@ -12,12 +12,6 @@ DB_FILE_MARKERS = {
     'db.sqlite3-wal',
 }
 
-OPENAI_ENV_NAMES = (
-    'OPENAI_API_KEY',
-    'OPENAI_BASE_URL',
-    'OPENAI_MODEL',
-)
-
 COMMON_HIDDEN_IMPORTS = (
     'waitress',
     'webview',
@@ -32,13 +26,6 @@ COMMON_HIDDEN_IMPORTS = (
     'django.contrib.messages',
     'django.contrib.humanize',
     'pandas',
-    'openai',
-    'httpx',
-    'httpcore',
-    'anyio',
-    'sniffio',
-    'pydantic',
-    'pydantic_core',
     'openpyxl',
     'xlrd',
     'pptx',
@@ -56,21 +43,6 @@ COMMON_HIDDEN_IMPORTS = (
     'sqlcipher3.dbapi2',
 )
 
-OPEN_API_HIDDEN_IMPORTS = (
-    'seats.open_api',
-    'seats.open_api.ai_session',
-    'seats.open_api.auth',
-    'seats.open_api.mcp',
-    'seats.open_api.openapi',
-    'seats.open_api.realtime',
-    'seats.open_api.registry',
-    'seats.open_api.serializers',
-    'seats.open_api.shared_state',
-    'seats.open_api.tools',
-    'seats.open_api.urls',
-    'seats.open_api.views',
-)
-
 WINDOWS_HIDDEN_IMPORTS = (
     'clr',
     'pythonnet',
@@ -86,9 +58,6 @@ MACOS_HIDDEN_IMPORTS = (
 )
 
 COMMON_COLLECT_ALL = (
-    'openai',
-    'httpx',
-    'httpcore',
     'pptx',
     'webview',
     'whitenoise',
@@ -178,7 +147,6 @@ def _build_pyinstaller_command(data_args):
         cmd.extend(['--osx-bundle-identifier', 'xyz.577622.fuckseats'])
 
     _extend_option_pairs(cmd, '--hidden-import', COMMON_HIDDEN_IMPORTS)
-    _extend_option_pairs(cmd, '--hidden-import', OPEN_API_HIDDEN_IMPORTS)
     _extend_option_pairs(cmd, '--collect-all', COMMON_COLLECT_ALL)
     _extend_option_pairs(cmd, '--collect-data', COMMON_COLLECT_DATA)
     _extend_option_pairs(cmd, '--copy-metadata', COMMON_COPY_METADATA)
@@ -278,7 +246,7 @@ def main():
     BUILD_DIR = os.path.join(BASE_DIR, 'build')
     SPEC_FILE = os.path.join(BASE_DIR, 'FuckSeats.spec')
     STAGE_DIR = os.path.join(BASE_DIR, '_data_stage')
-    DATA_DIRS = ['templates', 'static', 'seats', 'runtime', 'config', 'plugins', 'skill']
+    DATA_DIRS = ['templates', 'static', 'seats', 'runtime', 'config']
     DB_EXCLUDE_PATTERNS = ['*.sqlite3', '*.sqlite', '*.db']
 
     print("正在清理旧构建文件...", flush=True)
@@ -349,19 +317,7 @@ def main():
             print(f"已移除 {len(removed_db_files)} 个数据库文件，避免随安装包分发。", flush=True)
         else:
             print("未发现可执行目录中的数据库文件。", flush=True)
-        configured_openai_envs = [name for name in OPENAI_ENV_NAMES if os.getenv(name)]
-        if configured_openai_envs:
-            print(
-                "检测到当前环境已配置 OpenAI 变量: "
-                + ", ".join(configured_openai_envs)
-                + "。打包后的程序运行时也可继续读取这些环境变量。",
-                flush=True
-            )
-        else:
-            print(
-                "当前环境未配置 OpenAI 变量。打包后的程序仍可在 Future Mode 页面中直接填写 API Key / Base URL / Model ID。",
-                flush=True
-            )
+        print("离线会议版：未打包 OpenAI / Future Mode / 插件运行内容。", flush=True)
         output_path = _build_output_path(DIST_DIR)
         print(f"构建产物位置: {output_path}", flush=True)
     except subprocess.CalledProcessError as e:
