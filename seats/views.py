@@ -17864,10 +17864,12 @@ def realtime_status(request):
 
 # ===== 会场排排座 V1 页面 =====
 def meeting_home(request):
+    all_participants=Participant.objects.select_related('department','personnel_level').all()
     return render(request, 'seats/meeting_home.html', {
         'meetings': Meeting.objects.select_related('venue').all()[:100],
         'venues': Classroom.objects.all().order_by('name'),
-        'participants': Participant.objects.select_related('department','personnel_level').filter(active=True),
+        'participants': all_participants.filter(active=True),
+        'all_participants': all_participants,
         'levels': PersonnelLevel.objects.filter(active=True),
         'departments': PoliceDepartment.objects.filter(active=True),
     })
@@ -17970,15 +17972,16 @@ def meeting_swap_seats(request, pk):
     seat_a=get_object_or_404(Seat, pk=request.POST.get('seat_a'), classroom=meeting.venue, cell_type=SeatCellType.SEAT)
     seat_b=get_object_or_404(Seat, pk=request.POST.get('seat_b'), classroom=meeting.venue, cell_type=SeatCellType.SEAT)
     if seat_a.pk == seat_b.pk: return JsonResponse({'ok':True})
-    a,_=MeetingSeatAssignment.objects.get_or_create(meeting=meeting, seat=seat_a)
-    b,_=MeetingSeatAssignment.objects.get_or_create(meeting=meeting, seat=seat_b)
-    if a.locked or b.locked or a.skipped or b.skipped:
-        return JsonResponse({'ok':False,'error':'锁定或跳过座位不能交换'},status=400)
-    pa,pb=a.participant,b.participant
-    a.participant=None; a.save(update_fields=['participant'])
-    b.participant=None; b.save(update_fields=['participant'])
-    a.participant=pb; b.participant=pa
-    a.save(update_fields=['participant']); b.save(update_fields=['participant'])
+    with transaction.atomic():
+        a,_=MeetingSeatAssignment.objects.select_for_update().get_or_create(meeting=meeting, seat=seat_a)
+        b,_=MeetingSeatAssignment.objects.select_for_update().get_or_create(meeting=meeting, seat=seat_b)
+        if a.locked or b.locked or a.skipped or b.skipped:
+            return JsonResponse({'ok':False,'error':'锁定或跳过座位不能交换'},status=400)
+        pa,pb=a.participant,b.participant
+        a.participant=None; a.save(update_fields=['participant'])
+        b.participant=None; b.save(update_fields=['participant'])
+        a.participant=pb; b.participant=pa
+        a.save(update_fields=['participant']); b.save(update_fields=['participant'])
     return JsonResponse({'ok':True})
 
 def meeting_print_cards(request, pk):
