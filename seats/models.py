@@ -680,6 +680,21 @@ class Participant(models.Model):
     def __str__(self): return self.name
 
 
+class DeskCardTemplate(models.Model):
+    LARGE = 'large'
+    SMALL = 'small'
+    KIND_CHOICES = [(LARGE, '大桌牌'), (SMALL, '小桌牌')]
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, unique=True, verbose_name='桌牌类型')
+    width_mm = models.PositiveIntegerField(default=190, verbose_name='宽度(mm)')
+    height_mm = models.PositiveIntegerField(default=90, verbose_name='高度(mm)')
+    font_size_pt = models.PositiveIntegerField(default=52, verbose_name='字号(pt)')
+    active = models.BooleanField(default=True, verbose_name='启用')
+    class Meta:
+        verbose_name = '桌牌模板'
+        verbose_name_plural = verbose_name
+    def __str__(self): return self.get_kind_display()
+
+
 class Meeting(models.Model):
     name = models.CharField(max_length=160, verbose_name='会议名称')
     meeting_date = models.DateField(null=True, blank=True, verbose_name='会议日期')
