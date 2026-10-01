@@ -9,9 +9,6 @@ import logging
 from io import StringIO
 from django.core.management import call_command
 from waitress import serve
-from desktop_runtime import (
-)
-
 HOST = '127.0.0.1'
 PORT = 23948
 
