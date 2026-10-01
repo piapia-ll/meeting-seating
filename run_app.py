@@ -53,13 +53,6 @@ def _wait_for_server_ready(url, timeout=20):
             last_error = exc
             if getattr(exc, 'code', 500) < 500:
                 return
-            try:
-                with urllib.request.urlopen(url.rsplit('/', 1)[0] + '/static/favicon.svg', timeout=1) as response:
-                    status = getattr(response, 'status', 200)
-                    if status < 500:
-                        return
-            except Exception:
-                pass
         except Exception as exc:
             last_error = exc
             time.sleep(0.15)
@@ -167,10 +160,10 @@ def main():
             name='meeting-seating-waitress',
         )
         server_thread.start()
-        _wait_for_server_ready(app_url)
+        _wait_for_server_ready(f'http://{HOST}:{PORT}/meetings/')
 
         if dev_mode:
-            print(f"客户端已启动：http://{HOST}:{PORT}", flush=True)
+            print(f"客户端已启动：{app_url}", flush=True)
             _open_browser(app_url)
             try:
                 while server_thread.is_alive():
