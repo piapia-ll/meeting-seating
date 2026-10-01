@@ -132,3 +132,34 @@ class MeetingSeatStateGuardTests(TestCase):
         self.assertEqual(self.a.participant_id,self.person.pk)
         self.assertIsNone(self.b.participant_id)
         self.assertTrue(self.b.skipped)
+
+
+class MeetingWorkflowSmokeTests(TestCase):
+    def setUp(self):
+        self.venue=Classroom.objects.create(name='流程验收会场',rows=2,cols=5)
+        self.people=[
+            Participant.objects.create(name='领导甲',category='bureau_leader',leader_order=1),
+            Participant.objects.create(name='列席甲',category='attendee',attendee_order=1),
+            Participant.objects.create(name='部门甲',category='department',personal_order=1),
+        ]
+        self.meeting=Meeting.objects.create(name='流程验收会议',venue=self.venue,use_stage=False)
+        for person in self.people:
+            MeetingParticipant.objects.create(meeting=self.meeting,participant=person)
+
+    def test_meeting_main_flow_pages_and_arrange(self):
+        home=self.client.get(reverse('meeting_home'))
+        self.assertEqual(home.status_code,200)
+        detail=self.client.get(reverse('meeting_detail',args=[self.meeting.pk]))
+        self.assertEqual(detail.status_code,200)
+
+        arranged=self.client.post(reverse('meeting_arrange',args=[self.meeting.pk]))
+        self.assertIn(arranged.status_code,(200,302))
+        assigned=self.meeting.assignments.exclude(participant=None)
+        self.assertEqual(assigned.count(),3)
+        self.assertEqual(set(assigned.values_list('participant_id',flat=True)),set(p.pk for p in self.people))
+
+        chart=self.client.get(reverse('meeting_print_chart',args=[self.meeting.pk]))
+        cards=self.client.get(reverse('meeting_print_cards',args=[self.meeting.pk]))
+        self.assertEqual(chart.status_code,200)
+        self.assertEqual(cards.status_code,200)
+        self.assertContains(chart,'流程验收会议')
