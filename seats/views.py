@@ -18139,13 +18139,13 @@ def local_backup_download(request):
 
 @require_POST
 def local_backup_restore(request):
-    import shutil
     upload=request.FILES.get('file')
     if not upload: return JsonResponse({'ok':False,'error':'请选择备份文件'},status=400)
     if upload.size > 1024*1024*1024: return JsonResponse({'ok':False,'error':'备份文件过大'},status=400)
     target=database_path()
-    safety=backups_directory()/f'before-restore-{timezone.localtime().strftime("%Y%m%d-%H%M%S")}.sqlite3'
-    if target.exists(): shutil.copy2(target,safety)
+    if target.exists():
+        from database_security import backup_database_for_update
+        backup_database_for_update(f'before-restore-{timezone.localtime().strftime("%Y%m%d-%H%M%S")}')
     tmp=temp_directory()/'restore.sqlite3'
     with tmp.open('wb') as out:
         for chunk in upload.chunks(): out.write(chunk)
