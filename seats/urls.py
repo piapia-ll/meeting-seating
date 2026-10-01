@@ -15,6 +15,7 @@ urlpatterns = [
     path('meetings/<int:pk>/swap/', views.meeting_swap_seats, name='meeting_swap_seats'),
     path('meetings/<int:pk>/cards/', views.meeting_print_cards, name='meeting_print_cards'),
     path('meetings/<int:pk>/print/', views.meeting_print_chart, name='meeting_print_chart'),
+    path('meeting-data/desk-cards/settings/', views.desk_card_template_update, name='desk_card_template_update'),
     path('meeting-data/backup/', views.local_backup_download, name='local_backup_download'),
     path('meeting-data/restore/', views.local_backup_restore, name='local_backup_restore'),
     path('meetings/<int:pk>/seat/<int:seat_id>/state/', views.meeting_seat_state, name='meeting_seat_state'),
