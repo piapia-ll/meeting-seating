@@ -17996,8 +17996,8 @@ def meeting_print_cards(request, pk):
             cards.append({'text':p.desk_card_text,'kind':'small','person':p})
         else:
             cards.append({'text':p.desk_card_text,'kind':'large','person':p})
-    defaults={'large':{'width_mm':190,'height_mm':90,'font_size_pt':52},'small':{'width_mm':120,'height_mm':60,'font_size_pt':32}}
-    templates={x.kind:{'width_mm':x.width_mm,'height_mm':x.height_mm,'font_size_pt':x.font_size_pt} for x in DeskCardTemplate.objects.filter(active=True)}
+    defaults={'large':{'width_mm':190,'height_mm':90,'font_size_pt':52,'content_source':'person'},'small':{'width_mm':120,'height_mm':60,'font_size_pt':32,'content_source':'department'}}
+    templates={x.kind:{'width_mm':x.width_mm,'height_mm':x.height_mm,'font_size_pt':x.font_size_pt,'content_source':x.content_source} for x in DeskCardTemplate.objects.filter(active=True)}
     for kind, values in defaults.items(): templates.setdefault(kind,values)
     return render(request,'seats/meeting_cards.html',{'meeting':meeting,'cards':cards,'card_templates':templates})
 
@@ -18089,6 +18089,21 @@ def participants_import(request):
                 'active':str(vals[8] or '是').strip() not in ('否','0','False','false'),'remark':str(vals[9] or '').strip(),
             })
             imported += 1
+    return redirect('meeting_home')
+
+
+@require_POST
+def desk_card_template_update(request):
+    defaults={'large':(190,90,52,'person'),'small':(120,60,32,'department')}
+    for kind,(dw,dh,df,ds) in defaults.items():
+        obj,_=DeskCardTemplate.objects.get_or_create(kind=kind)
+        def positive(name, fallback):
+            try: return max(1,int(request.POST.get(f'{kind}_{name}') or fallback))
+            except (TypeError,ValueError): return fallback
+        obj.width_mm=positive('width',dw); obj.height_mm=positive('height',dh); obj.font_size_pt=positive('font_size',df)
+        source=request.POST.get(f'{kind}_content_source') or ds
+        obj.content_source=source if source in ('person','department') else ds
+        obj.active=True; obj.save()
     return redirect('meeting_home')
 
 
