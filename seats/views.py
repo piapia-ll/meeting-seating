@@ -17872,6 +17872,7 @@ def meeting_home(request):
         'all_participants': all_participants,
         'levels': PersonnelLevel.objects.filter(active=True),
         'departments': PoliceDepartment.objects.filter(active=True),
+        'desk_card_templates': {x.kind:x for x in DeskCardTemplate.objects.all()},
     })
 
 @require_POST
@@ -17987,18 +17988,22 @@ def meeting_swap_seats(request, pk):
 def meeting_print_cards(request, pk):
     meeting=get_object_or_404(Meeting, pk=pk)
     assigned=meeting.assignments.select_related('participant__department').exclude(participant=None).order_by('sort_order')
-    cards=[]; seen_departments=set()
-    for a in assigned:
-        p=a.participant
-        if p.category == ParticipantCategory.DEPARTMENT and p.department_id:
-            if p.department_id in seen_departments: continue
-            seen_departments.add(p.department_id)
-            cards.append({'text':p.desk_card_text,'kind':'small','person':p})
-        else:
-            cards.append({'text':p.desk_card_text,'kind':'large','person':p})
     defaults={'large':{'width_mm':190,'height_mm':90,'font_size_pt':52,'content_source':'person'},'small':{'width_mm':120,'height_mm':60,'font_size_pt':32,'content_source':'department'}}
     templates={x.kind:{'width_mm':x.width_mm,'height_mm':x.height_mm,'font_size_pt':x.font_size_pt,'content_source':x.content_source} for x in DeskCardTemplate.objects.filter(active=True)}
     for kind, values in defaults.items(): templates.setdefault(kind,values)
+    cards=[]; seen_department_cards=set()
+    for a in assigned:
+        p=a.participant
+        kind='small' if p.category == ParticipantCategory.DEPARTMENT else 'large'
+        source=templates[kind]['content_source']
+        if source == 'department' and p.department_id:
+            dedupe=(kind,p.department_id)
+            if dedupe in seen_department_cards: continue
+            seen_department_cards.add(dedupe)
+            text=p.department.desk_card_name
+        else:
+            text=p.name
+        cards.append({'text':text,'kind':kind,'person':p})
     return render(request,'seats/meeting_cards.html',{'meeting':meeting,'cards':cards,'card_templates':templates})
 
 
