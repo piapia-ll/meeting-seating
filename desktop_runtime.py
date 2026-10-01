@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-APP_NAME = "不想排座位"
+APP_NAME = "会场排排座"
 MACOS_PACKAGE_IDENTIFIER = "xyz.577622.fuckseats.pkg"
 MAX_LOCAL_UPDATE_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
 DEFAULT_UPDATE_MANIFEST_URL = "https://apps.577622.xyz/api/user_a6d12cebda652894/7h4sjhx0azr/api.json"
