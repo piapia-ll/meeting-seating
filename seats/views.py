@@ -18126,13 +18126,12 @@ def local_backup_restore(request):
     tmp=temp_directory()/'restore.sqlite3'
     with tmp.open('wb') as out:
         for chunk in upload.chunks(): out.write(chunk)
-    import sqlite3
+    from database_security import DatabaseSecurityError, verify_database_backup
     try:
-        conn=sqlite3.connect(str(tmp)); ok=conn.execute('PRAGMA integrity_check').fetchone()[0]; conn.close()
-        if ok!='ok': raise ValueError(ok)
-    except Exception:
+        verify_database_backup(tmp)
+    except DatabaseSecurityError:
         tmp.unlink(missing_ok=True)
-        return JsonResponse({'ok':False,'error':'不是有效的 SQLite 备份'},status=400)
+        return JsonResponse({'ok':False,'error':'备份无效、已损坏，或不是由当前安装创建的加密备份'},status=400)
     from django.db import connections
     connections.close_all(); tmp.replace(target)
     return JsonResponse({'ok':True,'message':'恢复完成，请重新启动程序'})
