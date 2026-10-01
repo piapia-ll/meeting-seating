@@ -18054,20 +18054,38 @@ def participants_export(request):
 @require_POST
 def participants_import(request):
     f=request.FILES.get('file')
-    if not f: return redirect('meeting_home')
-    wb=openpyxl.load_workbook(f,data_only=True); ws=wb.active
+    if not f:
+        return JsonResponse({'ok':False,'error':'请选择 Excel 文件'},status=400)
+
+    def import_int(value, default=100):
+        if value in (None, ''): return default
+        try: return int(float(value))
+        except (TypeError, ValueError): return default
+
+    try:
+        wb=openpyxl.load_workbook(f,data_only=True)
+    except Exception:
+        return JsonResponse({'ok':False,'error':'无法读取 Excel 文件，请确认文件格式正确'},status=400)
+    ws=wb.active
     category_map={'局领导':ParticipantCategory.BUREAU_LEADER,'列席人员':ParticipantCategory.ATTENDEE,'警种部门':ParticipantCategory.DEPARTMENT,'警种部门人员':ParticipantCategory.DEPARTMENT}
-    for row in ws.iter_rows(min_row=2,values_only=True):
-        if not row or not row[0]: continue
-        vals=list(row)+[None]*10
-        level=PersonnelLevel.objects.filter(name=str(vals[2]).strip()).first() if vals[2] else None
-        dept=PoliceDepartment.objects.filter(name=str(vals[3]).strip()).first() if vals[3] else None
-        Participant.objects.update_or_create(name=str(vals[0]).strip(),department=dept,defaults={
-            'category':category_map.get(str(vals[1]).strip(),ParticipantCategory.DEPARTMENT),
-            'personnel_level':level,'position':str(vals[4] or '').strip(),
-            'leader_order':int(vals[5] or 100),'attendee_order':int(vals[6] or 100),'personal_order':int(vals[7] or 100),
-            'active':str(vals[8] or '是').strip() not in ('否','0','False','false'),'remark':str(vals[9] or '').strip(),
-        })
+    imported=0
+    with transaction.atomic():
+        for row in ws.iter_rows(min_row=2,values_only=True):
+            if not row or not row[0]: continue
+            vals=list(row)+[None]*10
+            name=str(vals[0]).strip()
+            level_name=str(vals[2]).strip() if vals[2] else ''
+            dept_name=str(vals[3]).strip() if vals[3] else ''
+            level=PersonnelLevel.objects.filter(name=level_name).first() if level_name else None
+            dept=PoliceDepartment.objects.filter(name=dept_name).first() if dept_name else None
+            # 同名人员可能属于不同部门；无部门人员则以“姓名+无部门”匹配。
+            Participant.objects.update_or_create(name=name,department=dept,defaults={
+                'category':category_map.get(str(vals[1]).strip(),ParticipantCategory.DEPARTMENT),
+                'personnel_level':level,'position':str(vals[4] or '').strip(),
+                'leader_order':import_int(vals[5]),'attendee_order':import_int(vals[6]),'personal_order':import_int(vals[7]),
+                'active':str(vals[8] or '是').strip() not in ('否','0','False','false'),'remark':str(vals[9] or '').strip(),
+            })
+            imported += 1
     return redirect('meeting_home')
 
 
