@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 from types import SimpleNamespace
 from .meeting_seating import audience_column_priority, stage_column_priority, participant_sort_key, auto_assign
 from .models import Classroom, Meeting, MeetingParticipant, MeetingSeatAssignment, Participant, VenueSeatRole
@@ -70,3 +71,43 @@ class MeetingAutoAssignDatabaseTests(TestCase):
         auto_assign(self.meeting)
         ids=list(self.meeting.assignments.exclude(participant=None).values_list('participant_id',flat=True))
         self.assertEqual(len(ids),len(set(ids)))
+
+
+class MeetingSeatSwapViewTests(TestCase):
+    def setUp(self):
+        self.venue=Classroom.objects.create(name='交换测试会场',rows=1,cols=2)
+        self.seats=list(self.venue.seats.order_by('col'))
+        self.people=[Participant.objects.create(name='甲'),Participant.objects.create(name='乙')]
+        self.meeting=Meeting.objects.create(name='交换测试会议',venue=self.venue)
+        for p in self.people:
+            MeetingParticipant.objects.create(meeting=self.meeting,participant=p)
+        self.a=MeetingSeatAssignment.objects.create(meeting=self.meeting,seat=self.seats[0],participant=self.people[0])
+        self.b=MeetingSeatAssignment.objects.create(meeting=self.meeting,seat=self.seats[1],participant=self.people[1])
+
+    def swap(self):
+        return self.client.post(reverse('meeting_swap_seats',args=[self.meeting.pk]),{
+            'seat_a':self.seats[0].pk,'seat_b':self.seats[1].pk,
+        })
+
+    def test_swap_two_people(self):
+        response=self.swap()
+        self.assertEqual(response.status_code,200)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(self.a.participant_id,self.people[1].pk)
+        self.assertEqual(self.b.participant_id,self.people[0].pk)
+
+    def test_locked_seat_rejects_swap_without_partial_change(self):
+        self.a.locked=True; self.a.save(update_fields=['locked'])
+        response=self.swap()
+        self.assertEqual(response.status_code,400)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(self.a.participant_id,self.people[0].pk)
+        self.assertEqual(self.b.participant_id,self.people[1].pk)
+
+    def test_swap_person_into_empty_seat(self):
+        self.b.participant=None; self.b.save(update_fields=['participant'])
+        response=self.swap()
+        self.assertEqual(response.status_code,200)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertIsNone(self.a.participant_id)
+        self.assertEqual(self.b.participant_id,self.people[0].pk)
