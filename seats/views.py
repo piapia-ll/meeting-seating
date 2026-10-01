@@ -18106,14 +18106,12 @@ def meeting_print_chart(request, pk):
     return render(request,'seats/meeting_print_chart.html',{'meeting':meeting,'grid':grid,'paper':paper,'orientation':orientation})
 
 def local_backup_download(request):
-    import shutil
-    src=database_path()
-    if not src.exists(): raise Http404('数据库不存在')
+    from database_security import backup_database_for_update
     stamp=timezone.localtime().strftime('%Y%m%d-%H%M%S')
-    dest=backups_directory()/f'meeting-seating-{stamp}.sqlite3'
-    shutil.copy2(src,dest)
+    dest=backup_database_for_update(f'manual-{stamp}')
+    if not dest: raise Http404('数据库不存在')
     resp=HttpResponse(dest.read_bytes(),content_type='application/octet-stream')
-    resp['Content-Disposition']=f'attachment; filename="{dest.name}"'
+    resp['Content-Disposition']=f'attachment; filename="meeting-seating-{stamp}.sqlite3"'
     return resp
 
 @require_POST
