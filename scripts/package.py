@@ -95,6 +95,10 @@ WINDOWS_COPY_METADATA = (
 
 EXCLUDED_MODULES = (
     'website',
+    'openai',
+    'httpx',
+    'httpcore',
+    'seats.open_api',
 )
 
 UNWANTED_PROJECT_BACKEND_PATHS = (
