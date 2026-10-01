@@ -111,3 +111,24 @@ class MeetingSeatSwapViewTests(TestCase):
         self.a.refresh_from_db(); self.b.refresh_from_db()
         self.assertIsNone(self.a.participant_id)
         self.assertEqual(self.b.participant_id,self.people[0].pk)
+
+
+class MeetingSeatStateGuardTests(TestCase):
+    def setUp(self):
+        self.venue=Classroom.objects.create(name='状态测试会场',rows=1,cols=2)
+        self.seats=list(self.venue.seats.order_by('col'))
+        self.person=Participant.objects.create(name='甲')
+        self.meeting=Meeting.objects.create(name='状态测试会议',venue=self.venue)
+        MeetingParticipant.objects.create(meeting=self.meeting,participant=self.person)
+        self.a=MeetingSeatAssignment.objects.create(meeting=self.meeting,seat=self.seats[0],participant=self.person)
+        self.b=MeetingSeatAssignment.objects.create(meeting=self.meeting,seat=self.seats[1],skipped=True)
+
+    def test_skipped_seat_rejects_manual_swap(self):
+        response=self.client.post(reverse('meeting_swap_seats',args=[self.meeting.pk]),{
+            'seat_a':self.seats[0].pk,'seat_b':self.seats[1].pk,
+        })
+        self.assertEqual(response.status_code,400)
+        self.a.refresh_from_db(); self.b.refresh_from_db()
+        self.assertEqual(self.a.participant_id,self.person.pk)
+        self.assertIsNone(self.b.participant_id)
+        self.assertTrue(self.b.skipped)
