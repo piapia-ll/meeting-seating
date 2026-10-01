@@ -689,6 +689,7 @@ class DeskCardTemplate(models.Model):
     height_mm = models.PositiveIntegerField(default=90, verbose_name='高度(mm)')
     font_size_pt = models.PositiveIntegerField(default=52, verbose_name='字号(pt)')
     active = models.BooleanField(default=True, verbose_name='启用')
+    content_source = models.CharField(max_length=16, choices=[('person','人员姓名'),('department','部门桌牌名')], default='person', verbose_name='内容来源')
     class Meta:
         verbose_name = '桌牌模板'
         verbose_name_plural = verbose_name
