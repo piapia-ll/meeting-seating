@@ -393,6 +393,19 @@ def prepare_desktop_database() -> Path:
     return path
 
 
+
+def verify_database_backup(path: Path) -> None:
+    """校验用户选择的备份是否可由当前安装安全打开。"""
+    path = Path(path)
+    if not path.exists() or path.stat().st_size <= 0:
+        raise DatabaseSecurityError("备份文件为空")
+    if database_encryption_enabled():
+        key = get_database_key(create=False)
+        _verify_encrypted_database(path, key)
+    else:
+        _verify_plaintext_database(path)
+
+
 def backup_database_for_update(target_version: str) -> Path | None:
     path = database_path()
     if not path.exists() or path.stat().st_size <= 0:
