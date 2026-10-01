@@ -39,7 +39,7 @@ from .models import (
     OnboardingState,
     SortStrategy,
     PersonnelLevel, PoliceDepartment, Participant, ParticipantCategory,
-    Meeting, MeetingParticipant, MeetingSeatAssignment,
+    Meeting, MeetingParticipant, MeetingSeatAssignment, DeskCardTemplate,
 )
 from .sorting import (
     definition_for_field,
@@ -17996,7 +17996,10 @@ def meeting_print_cards(request, pk):
             cards.append({'text':p.desk_card_text,'kind':'small','person':p})
         else:
             cards.append({'text':p.desk_card_text,'kind':'large','person':p})
-    return render(request,'seats/meeting_cards.html',{'meeting':meeting,'cards':cards})
+    defaults={'large':{'width_mm':190,'height_mm':90,'font_size_pt':52},'small':{'width_mm':120,'height_mm':60,'font_size_pt':32}}
+    templates={x.kind:{'width_mm':x.width_mm,'height_mm':x.height_mm,'font_size_pt':x.font_size_pt} for x in DeskCardTemplate.objects.filter(active=True)}
+    for kind, values in defaults.items(): templates.setdefault(kind,values)
+    return render(request,'seats/meeting_cards.html',{'meeting':meeting,'cards':cards,'card_templates':templates})
 
 
 @require_POST
