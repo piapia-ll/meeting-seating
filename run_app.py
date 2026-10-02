@@ -40,6 +40,10 @@ def _is_dev_mode(argv):
     return any(arg in {'-dev', '--dev'} for arg in argv[1:])
 
 
+def _is_smoke_test(argv):
+    return '--smoke-test' in argv[1:]
+
+
 def _wait_for_server_ready(url, timeout=20):
     deadline = time.time() + timeout
     last_error = None
@@ -117,6 +121,7 @@ def _start_desktop_window(url):
 
 def main():
     dev_mode = _is_dev_mode(sys.argv)
+    smoke_test = _is_smoke_test(sys.argv)
     from database_security import application_lock, prepare_desktop_database
 
     app_lock = application_lock().acquire()
@@ -160,7 +165,14 @@ def main():
             name='meeting-seating-waitress',
         )
         server_thread.start()
-        _wait_for_server_ready(f'http://{HOST}:{PORT}/meetings/')
+        _wait_for_server_ready(app_url)
+
+        if smoke_test:
+            with urllib.request.urlopen(app_url, timeout=5) as response:
+                if getattr(response, 'status', 500) != 200:
+                    raise RuntimeError(f'桌面版冒烟测试失败，会议工作台状态码: {response.status}')
+            print('桌面版冒烟测试通过。', flush=True)
+            return
 
         if dev_mode:
             print(f"客户端已启动：{app_url}", flush=True)
@@ -172,7 +184,7 @@ def main():
                 print("\n开发模式已停止。", flush=True)
             return
 
-        print(f"客户端已启动：http://{HOST}:{PORT}", flush=True)
+        print(f"客户端已启动：{app_url}", flush=True)
         _start_desktop_window(app_url)
     finally:
         app_lock.release()
