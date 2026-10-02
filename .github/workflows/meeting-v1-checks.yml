@@ -43,9 +43,9 @@ jobs:
       - name: Smoke test packaged executable
         shell: pwsh
         run: |
-          & "dist/FuckSeats/FuckSeats.exe" --smoke-test
-          if ($LASTEXITCODE -ne 0) {
-            throw "Packaged executable smoke test failed with exit code $LASTEXITCODE."
+          $process = Start-Process -FilePath "dist/FuckSeats/FuckSeats.exe" -ArgumentList "--smoke-test" -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged executable smoke test failed with exit code $($process.ExitCode)."
           }
       - uses: actions/upload-artifact@v4
         with:
