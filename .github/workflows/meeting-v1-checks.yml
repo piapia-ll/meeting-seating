@@ -40,6 +40,13 @@ jobs:
             throw "Windows executable was not produced."
           }
           Get-Item "dist/FuckSeats/FuckSeats.exe" | Format-List FullName,Length
+      - name: Smoke test packaged executable
+        shell: pwsh
+        run: |
+          & "dist/FuckSeats/FuckSeats.exe" --smoke-test
+          if ($LASTEXITCODE -ne 0) {
+            throw "Packaged executable smoke test failed with exit code $LASTEXITCODE."
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: meeting-seating-windows-dev
