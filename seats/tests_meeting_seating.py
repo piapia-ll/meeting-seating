@@ -163,3 +163,45 @@ class MeetingWorkflowSmokeTests(TestCase):
         self.assertEqual(chart.status_code,200)
         self.assertEqual(cards.status_code,200)
         self.assertContains(chart,'流程验收会议')
+
+
+class MeetingFinalAcceptanceTests(TestCase):
+    def setUp(self):
+        self.venue=Classroom.objects.create(name='最终验收会场',rows=2,cols=5)
+        self.seats=list(self.venue.seats.order_by('row','col'))
+        for seat in self.seats[:5]:
+            seat.venue_role=VenueSeatRole.STAGE
+            seat.save(update_fields=['venue_role'])
+        self.people=[Participant.objects.create(name=f'验收人员{i}',category='bureau_leader',leader_order=i) for i in range(1,9)]
+        self.meeting=Meeting.objects.create(name='最终验收会议',venue=self.venue,use_stage=True,stage_mode='specified')
+        for i,p in enumerate(self.people):
+            MeetingParticipant.objects.create(meeting=self.meeting,participant=p,is_stage=i<3)
+
+    def test_stage_lock_skip_rerun_and_print(self):
+        auto_assign(self.meeting)
+        stage=list(self.meeting.assignments.filter(seat__venue_role=VenueSeatRole.STAGE,participant__isnull=False))
+        self.assertEqual(len(stage),3)
+
+        locked=stage[0]
+        locked_person=locked.participant_id
+        locked.locked=True
+        locked.save(update_fields=['locked'])
+
+        audience=self.meeting.assignments.filter(seat__venue_role=VenueSeatRole.AUDIENCE,participant__isnull=False).first()
+        skipped_seat=audience.seat
+        audience.participant=None
+        audience.skipped=True
+        audience.save(update_fields=['participant','skipped'])
+
+        auto_assign(self.meeting)
+        locked.refresh_from_db()
+        skipped=self.meeting.assignments.get(seat=skipped_seat)
+        self.assertEqual(locked.participant_id,locked_person)
+        self.assertTrue(locked.locked)
+        self.assertTrue(skipped.skipped)
+        self.assertIsNone(skipped.participant_id)
+
+        ids=list(self.meeting.assignments.exclude(participant=None).values_list('participant_id',flat=True))
+        self.assertEqual(len(ids),len(set(ids)))
+        self.assertEqual(self.client.get(reverse('meeting_print_chart',args=[self.meeting.pk])).status_code,200)
+        self.assertEqual(self.client.get(reverse('meeting_print_cards',args=[self.meeting.pk])).status_code,200)
