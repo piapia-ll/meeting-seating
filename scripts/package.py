@@ -41,6 +41,10 @@ COMMON_HIDDEN_IMPORTS = (
     'keyring',
     'sqlcipher3',
     'sqlcipher3.dbapi2',
+    'desktop_runtime',
+    'desktop_shell',
+    'app_paths',
+    'database_security',
 )
 
 WINDOWS_HIDDEN_IMPORTS = (
