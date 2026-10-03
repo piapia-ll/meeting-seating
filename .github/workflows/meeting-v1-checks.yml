@@ -41,9 +41,14 @@ jobs:
           }
           Get-Item "dist/FuckSeats/FuckSeats.exe" | Format-List FullName,Length
       - name: Smoke test packaged executable
+        timeout-minutes: 2
         shell: pwsh
         run: |
-          $process = Start-Process -FilePath "dist/FuckSeats/FuckSeats.exe" -ArgumentList "--smoke-test" -Wait -PassThru -NoNewWindow
+          $process = Start-Process -FilePath "dist/FuckSeats/FuckSeats.exe" -ArgumentList "--smoke-test" -PassThru -NoNewWindow
+          if (-not $process.WaitForExit(60000)) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "Packaged executable smoke test timed out after 60 seconds."
+          }
           if ($process.ExitCode -ne 0) {
             throw "Packaged executable smoke test failed with exit code $($process.ExitCode)."
           }
