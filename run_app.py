@@ -66,7 +66,11 @@ def _wait_for_server_ready(url, timeout=20):
 
 
 def _start_waitress(application):
-    serve(application, host=HOST, port=PORT, threads=32)
+    try:
+        serve(application, host=HOST, port=PORT, threads=32)
+    except Exception:
+        logging.exception('Waitress 本地服务异常退出')
+        raise
 
 
 def _open_browser(url):
@@ -172,6 +176,11 @@ def main():
                 if getattr(response, 'status', 500) != 200:
                     raise RuntimeError(f'桌面版冒烟测试失败，会议工作台状态码: {response.status}')
             print('桌面版冒烟测试通过。', flush=True)
+            # PyInstaller --windowed on Windows can keep runtime-owned threads alive
+            # after main() returns. Smoke mode is a CI-only probe, so terminate the
+            # frozen process explicitly after stdout has been flushed.
+            if getattr(sys, 'frozen', False) and sys.platform.startswith('win'):
+                os._exit(0)
             return
 
         if dev_mode:
