@@ -254,7 +254,7 @@ def main():
     BUILD_DIR = os.path.join(BASE_DIR, 'build')
     SPEC_FILE = os.path.join(BASE_DIR, 'FuckSeats.spec')
     STAGE_DIR = os.path.join(BASE_DIR, '_data_stage')
-    DATA_DIRS = ['templates', 'static', 'seats', 'runtime', 'config']
+    DATA_DIRS = ['templates', 'static', 'seats', 'runtime', 'config', 'plugin_core']
     DB_EXCLUDE_PATTERNS = ['*.sqlite3', '*.sqlite', '*.db']
 
     print("正在清理旧构建文件...", flush=True)
