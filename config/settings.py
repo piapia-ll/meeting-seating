@@ -34,13 +34,14 @@ INSTALLED_APPS = [
 ]
 
 APP_SHELL = os.getenv('FUCKSEATS_APP_SHELL', 'browser').strip() or 'browser'
+OFFLINE_MEETING_MODE = os.getenv('FUCKSEATS_OFFLINE_ONLY', '').strip().lower() in {'1', 'true', 'yes', 'on'}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'seats.data_sharing.DataSharingUsageMiddleware',
+    *([] if OFFLINE_MEETING_MODE else ['seats.data_sharing.DataSharingUsageMiddleware']),
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
