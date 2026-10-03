@@ -1,5 +1,5 @@
 from django.urls import path
-from . import views
+from . import meeting_views as views
 
 # 会场排排座离线版仅暴露会议业务入口；旧插件、AI、云端和数据共享路由不再加载。
 urlpatterns = [
