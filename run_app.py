@@ -175,7 +175,7 @@ def main():
             with urllib.request.urlopen(app_url, timeout=5) as response:
                 if getattr(response, 'status', 500) != 200:
                     raise RuntimeError(f'桌面版冒烟测试失败，会议工作台状态码: {response.status}')
-            print('桌面版冒烟测试通过。', flush=True)
+            print('Desktop smoke test passed.', flush=True)
             # PyInstaller --windowed on Windows can keep runtime-owned threads alive
             # after main() returns. Smoke mode is a CI-only probe, so terminate the
             # frozen process explicitly after stdout has been flushed.
