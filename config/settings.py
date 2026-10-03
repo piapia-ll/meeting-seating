@@ -13,7 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
-from app_paths import database_path, plugin_directories
+from app_paths import database_path
 from database_security import database_encryption_enabled
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -60,7 +60,7 @@ TEMPLATES = [
             'django.template.context_processors.request',
             'django.contrib.auth.context_processors.auth',
             'django.contrib.messages.context_processors.messages',
-            'seats.context_processors.app_runtime',
+            *([] if OFFLINE_MEETING_MODE else ['seats.context_processors.app_runtime']),
             ],
         },
     },
@@ -114,21 +114,3 @@ STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
 
-PLUGIN_DIRS = plugin_directories()
-PLUGIN_MARKETPLACE_URL = os.getenv('PLUGIN_MARKETPLACE_URL', '').strip()
-PLUGIN_REQUIRE_TRUSTED_SIGNATURE = os.getenv(
-    'PLUGIN_REQUIRE_TRUSTED_SIGNATURE', '0'
-).strip().lower() in {'1', 'true', 'yes', 'on'}
-
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '').strip()
-OPENAI_BASE_URL = os.getenv('OPENAI_BASE_URL', '').strip()
-OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4.1-mini').strip() or 'gpt-4.1-mini'
-WENDAO_AI_URL = 'https://ai.577622.xyz'
-
-# 原有 AI 赋能工作台和聊天接口保持关闭；Open API 的 AI 类工具单独开放，
-# 供外部 AI 工具调用班级能力和同步操作状态。
-AI_FEATURE_ENABLED = False
-OPEN_API_AI_TOOLS_ENABLED = os.getenv(
-    'OPEN_API_AI_TOOLS_ENABLED',
-    '1',
-).strip().lower() not in {'0', 'false', 'no', 'off'}
