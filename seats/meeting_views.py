@@ -1,6 +1,8 @@
 from io import BytesIO
 import openpyxl
 from django.db import transaction
+from django.db.models import Count, Q
+from django.db.models.deletion import ProtectedError
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -22,6 +24,88 @@ def _meeting_workspace_context():
 
 def meeting_home(request):
     return render(request, 'seats/meeting_home.html', _meeting_workspace_context())
+
+
+def venue_library(request):
+    venues=(Classroom.objects
+        .annotate(
+            usable_seats=Count('seats', filter=Q(seats__cell_type=SeatCellType.SEAT)),
+            stage_seats=Count('seats', filter=Q(seats__cell_type=SeatCellType.SEAT, seats__venue_role='stage')),
+        )
+        .order_by('name'))
+    return render(request, 'seats/venue_library.html', {'venues': venues})
+
+@require_POST
+def venue_create(request):
+    name=(request.POST.get('name') or '').strip() or '新会场'
+    try:
+        rows=max(1,min(30,int(request.POST.get('rows') or 6)))
+        cols=max(1,min(40,int(request.POST.get('cols') or 8)))
+    except (TypeError,ValueError):
+        rows,cols=6,8
+    venue=Classroom.objects.create(name=name, rows=rows, cols=cols)
+    return redirect('venue_edit', pk=venue.pk)
+
+def _venue_editor_context(venue, error=''):
+    seats={(s.row,s.col):s for s in venue.seats.all()}
+    grid=[[seats.get((r,c)) for c in range(1,venue.cols+1)] for r in range(1,venue.rows+1)]
+    return {'venue':venue,'grid':grid,'error':error}
+
+def venue_edit(request, pk):
+    venue=get_object_or_404(Classroom.objects.prefetch_related('seats'), pk=pk)
+    return render(request, 'seats/venue_edit.html', _venue_editor_context(venue))
+
+@require_POST
+def venue_update(request, pk):
+    venue=get_object_or_404(Classroom, pk=pk)
+    name=(request.POST.get('name') or venue.name).strip() or venue.name
+    try:
+        rows=max(1,min(30,int(request.POST.get('rows') or venue.rows)))
+        cols=max(1,min(40,int(request.POST.get('cols') or venue.cols)))
+    except (TypeError,ValueError):
+        rows,cols=venue.rows,venue.cols
+    venue.name=name
+    with transaction.atomic():
+        venue.rows=rows; venue.cols=cols; venue.save(update_fields=['name','rows','cols'])
+        venue.generate_seats()
+        outside=venue.seats.filter(Q(row__gt=rows)|Q(col__gt=cols))
+        try:
+            outside.delete()
+        except ProtectedError:
+            transaction.set_rollback(True)
+            venue.refresh_from_db()
+            venue=Classroom.objects.prefetch_related('seats').get(pk=pk)
+            return render(request,'seats/venue_edit.html',_venue_editor_context(venue,'历史会议已经使用了被缩减区域中的座位，不能缩小此会场。'),status=409)
+    return redirect('venue_edit', pk=pk)
+
+@require_POST
+def venue_cell_update(request, pk, seat_id):
+    venue=get_object_or_404(Classroom, pk=pk)
+    seat=get_object_or_404(Seat, pk=seat_id, classroom=venue)
+    action=request.POST.get('action')
+    if action=='audience':
+        seat.cell_type=SeatCellType.SEAT; seat.venue_role='audience'
+    elif action=='stage':
+        seat.cell_type=SeatCellType.SEAT; seat.venue_role='stage'
+    elif action=='aisle':
+        seat.cell_type=SeatCellType.AISLE; seat.venue_role='audience'
+    elif action=='podium':
+        seat.cell_type=SeatCellType.PODIUM; seat.venue_role='audience'
+    elif action=='empty':
+        seat.cell_type=SeatCellType.EMPTY; seat.venue_role='audience'
+    else:
+        return JsonResponse({'ok':False,'error':'未知会场单元类型'},status=400)
+    seat.save(update_fields=['cell_type','venue_role'])
+    return JsonResponse({'ok':True,'cell_type':seat.cell_type,'venue_role':seat.venue_role})
+
+@require_POST
+def venue_delete(request, pk):
+    venue=get_object_or_404(Classroom, pk=pk)
+    try:
+        venue.delete()
+    except ProtectedError:
+        return HttpResponse('该会场已有历史会议使用，不能删除。',status=409)
+    return redirect('venue_library')
 
 def participant_library(request):
     return render(request, 'seats/participant_library.html', _meeting_workspace_context())
