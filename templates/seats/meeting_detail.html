@@ -1,21 +1,106 @@
 {% extends 'seats/meeting_base.html' %}{% block title %}{{meeting.name}} - 会场排排座{% endblock %}
-{% block actions %}<div class="header-action-row"><a class="btn btn-secondary" href="{% url 'meeting_home' %}">返回会议</a><a class="btn btn-secondary" href="/meetings/{{meeting.id}}/edit/">编辑会议</a><form method="post" action="{% url 'meeting_arrange' meeting.id %}">{% csrf_token %}<button class="btn btn-primary">确认排序并自动排座</button></form><a class="btn btn-secondary" href="/meetings/{{meeting.id}}/print/">打印座位图</a><a class="btn btn-secondary" href="/meetings/{{meeting.id}}/cards/">打印桌牌</a></div>{% endblock %}
-{% block content %}<div class="classroom-layout"><section><div class="panel-card"><h2>{{meeting.name}}</h2><p>{{meeting.meeting_date|default:""}} · {{meeting.venue.name}}{% if meeting.use_stage %} · 使用主席台{% endif %}</p></div>
-<section class="seat-stage"><div class="seat-grid">{% for row in grid %}<div class="seat-row">{% for seat,a in row %}{% if seat %}<div class="seat cell-{{seat.cell_type}} meeting-seat" {% if seat.cell_type == 'seat' and not a.skipped and not a.locked %}data-seat-id="{{seat.id}}"{% if a and a.participant %} draggable="true"{% endif %}{% endif %} title="{{seat.row}}-{{seat.col}}"><div class="seat-placeholder">{% if a and a.participant %}<strong>{{a.participant.name}}</strong>{% if a.participant.department %}<br><small>{{a.participant.department.name}}</small>{% endif %}{% elif a and a.skipped %}⊘ 跳过{% elif seat.cell_type == 'seat' %}{{seat.row}}-{{seat.col}}{% else %}{{seat.get_cell_type_display}}{% endif %}</div>{% if seat.cell_type == 'seat' %}<form method="post" action="{% url 'meeting_seat_state' meeting.id seat.id %}" style="font-size:11px">{% csrf_token %}{% if a and a.locked %}<button name="action" value="unlock">解锁</button>{% else %}<button name="action" value="lock">锁定</button>{% endif %}{% if a and a.skipped %}<button name="action" value="unskip">恢复</button>{% else %}<button name="action" value="skip">跳过</button>{% endif %}</form>{% endif %}</div>{% endif %}{% endfor %}</div>{% endfor %}</div></section></section>
-<aside class="side-panel"><div class="panel-card"><h3>排序预览</h3><p class="panel-note">局领导 → 列席 → 行政级别 → 警种部门 → 部门内顺序</p><ol>{% for m in preview_members %}{% with p=m.participant %}<li><strong>{{p.name}}</strong> · {{p.get_category_display}}{% if p.personnel_level %} · {{p.personnel_level.name}}{% endif %}{% if p.department %} · {{p.department.name}}{% endif %}{% if meeting.use_stage %} · <b>{% if m.is_stage %}主席台{% else %}普通席{% endif %}</b>{% endif %}<form method="post" action="{% url 'meeting_participant_state' meeting.id p.id %}" style="display:inline">{% csrf_token %}{% if meeting.use_stage and meeting.stage_mode == 'specified' %}{% if m.is_stage %}<button name="action" value="audience">改普通席</button>{% else %}<button name="action" value="stage">上主席台</button>{% endif %}{% endif %}<button name="action" value="exclude">本次不参加</button></form></li>{% endwith %}{% empty %}<li>暂无人员</li>{% endfor %}</ol></div>
-<div class="panel-card"><h3>桌牌内容预览</h3>{% for p in preview %}<p>{{p.name}} → <strong>{{p.desk_card_text}}</strong></p>{% endfor %}</div></aside></div>
-<style>@media print{header,.side-panel,form,button{display:none!important}main{margin:0}.classroom-layout{display:block}.seat-stage{box-shadow:none;border:0}}</style>
+{% block actions %}<div class="workspace-top-actions"><a class="btn btn-secondary" href="{% url 'meeting_print_chart' meeting.id %}">打印座次表</a><a class="btn btn-secondary" href="{% url 'meeting_print_cards' meeting.id %}">打印桌牌</a></div>{% endblock %}
+{% block content %}
+<div class="arrange-shell">
+<aside class="arrange-left">
+  <a class="back-link" href="{% url 'meeting_home' %}">← 返回会议</a>
+  <div class="meeting-title-block"><h1>{{meeting.name}}</h1><p>{{meeting.meeting_date|date:"Y年m月d日"|default:"日期未填写"}} · {{meeting.venue.name}}</p></div>
+  <div class="summary-strip"><span><b>{{preview_members|length}}</b>参会</span><span><b>{{assigned_count}}</b>已入座</span><span><b>{{locked_count}}</b>锁定</span><span><b>{{skipped_count}}</b>跳过</span></div>
+  <div class="side-head"><strong>排序预览</strong><a href="{% url 'meeting_edit' meeting.id %}">编辑人员</a></div>
+  <p class="rule-note">局领导 → 列席人员 → 行政级别 → 警种部门 → 部门内顺序</p>
+  <div class="rank-list">{% for m in preview_members %}{% with p=m.participant %}
+    <div class="rank-item">
+      <span class="rank-no">{{forloop.counter}}</span>
+      <div class="rank-person"><strong>{{p.name}}</strong><small>{% if p.department %}{{p.department.short_name|default:p.department.name}}{% else %}{{p.get_category_display}}{% endif %}{% if p.personnel_level %} · {{p.personnel_level.name}}{% endif %}</small></div>
+      {% if meeting.use_stage %}<span class="seat-badge {% if m.is_stage %}stage{% endif %}">{% if m.is_stage %}主席台{% else %}普通席{% endif %}</span>{% endif %}
+      <form method="post" action="{% url 'meeting_participant_state' meeting.id p.id %}" class="rank-actions">{% csrf_token %}
+        {% if meeting.use_stage and meeting.stage_mode == 'specified' %}{% if m.is_stage %}<button title="调整为普通席" name="action" value="audience">↓</button>{% else %}<button title="调整到主席台" name="action" value="stage">↑</button>{% endif %}{% endif %}
+        <button title="本次不参加" name="action" value="exclude">×</button>
+      </form>
+    </div>
+  {% endwith %}{% empty %}<div class="side-empty">暂无参会人员</div>{% endfor %}</div>
+</aside>
+
+<main class="arrange-center">
+  <div class="workspace-head">
+    <div><span class="eyebrow">座次工作台</span><h2>会场排座</h2><p>自动排座后可直接拖动人员换座；锁定和跳过只影响当前会议。</p></div>
+    <div class="workspace-actions"><a class="btn btn-secondary" href="{% url 'meeting_edit' meeting.id %}">会议设置</a><form method="post" action="{% url 'meeting_arrange' meeting.id %}">{% csrf_token %}<button class="btn btn-primary">一键排座</button></form></div>
+  </div>
+  {% if meeting.use_stage %}<div class="front-label">主席台 / 会场前方</div>{% else %}<div class="front-label">会场前方</div>{% endif %}
+  <div class="meeting-canvas">
+    <div class="meeting-grid" style="--cols:{{meeting.venue.cols}}">
+    {% for row in grid %}{% for seat,a in row %}{% if seat %}
+      <div class="meeting-cell cell-{{seat.cell_type}} role-{{seat.venue_role}}{% if a and a.locked %} is-locked{% endif %}{% if a and a.skipped %} is-skipped{% endif %}{% if a and a.participant %} is-occupied{% endif %}"
+        {% if seat.cell_type == 'seat' %}data-inspectable="1" data-seat-id="{{seat.id}}" data-row="{{seat.row}}" data-col="{{seat.col}}" data-name="{{a.participant.name|default:''}}" data-dept="{{a.participant.department.name|default:''}}" data-locked="{% if a and a.locked %}1{% else %}0{% endif %}" data-skipped="{% if a and a.skipped %}1{% else %}0{% endif %}"{% if not a.locked and not a.skipped and a and a.participant %} draggable="true"{% endif %}{% endif %}>
+        {% if seat.cell_type == 'seat' %}
+          {% if a and a.skipped %}<span class="cell-icon">⊘</span><strong>跳过</strong>
+          {% elif a and a.participant %}<strong>{{a.participant.name}}</strong><small>{% if a.participant.department %}{{a.participant.department.short_name|default:a.participant.department.name}}{% else %}{{a.participant.get_category_display}}{% endif %}</small>{% if a.locked %}<span class="lock-mark">锁定</span>{% endif %}
+          {% else %}<span class="seat-position">{{seat.row}}-{{seat.col}}</span><small>空座</small>{% endif %}
+        {% elif seat.cell_type == 'aisle' %}<span class="physical-label">过道</span>
+        {% elif seat.cell_type == 'podium' %}<span class="physical-label">讲台</span>
+        {% else %}<span class="physical-label">空</span>{% endif %}
+      </div>
+    {% endif %}{% endfor %}{% endfor %}
+    </div>
+  </div>
+  <div class="back-label">会场后方</div>
+  <div class="canvas-footer"><span><i class="legend-dot normal"></i>普通席</span><span><i class="legend-dot stage"></i>主席台席</span><span><i class="legend-dot locked"></i>锁定</span><span><i class="legend-dot skipped"></i>跳过</span><b>拖动已入座人员即可换座</b></div>
+</main>
+
+<aside class="arrange-right">
+  <div class="inspector-card">
+    <span class="eyebrow">当前座位</span>
+    <div id="inspectEmpty" class="inspect-empty"><div class="inspect-seat-icon">○</div><strong>点击一个座位</strong><p>查看人员信息，并进行锁定或跳过操作。</p></div>
+    <div id="inspectBody" hidden>
+      <div class="inspect-position" id="inspectPosition"></div>
+      <h2 id="inspectName">空座</h2>
+      <p id="inspectDept" class="muted"></p>
+      <div class="inspect-status" id="inspectStatus"></div>
+      <div class="inspect-actions">
+        <button id="lockButton" class="btn btn-secondary" type="button">锁定座位</button>
+        <button id="skipButton" class="btn btn-secondary" type="button">跳过座位</button>
+      </div>
+    </div>
+  </div>
+  <div class="tips-card"><strong>操作提示</strong><p>先“一键排座”，再处理少量特殊情况。已锁定座位在重新排座时会保持不动。</p></div>
+  <div class="print-card"><strong>完成后</strong><a href="{% url 'meeting_print_chart' meeting.id %}">打印座次表 <span>→</span></a><a href="{% url 'meeting_print_cards' meeting.id %}">打印桌牌 <span>→</span></a></div>
+</aside>
+</div>
+
+<style>
+.workspace-top-actions{display:flex;gap:7px}.arrange-shell{display:grid;grid-template-columns:280px minmax(520px,1fr) 250px;min-height:calc(100vh - 65px)}.arrange-left,.arrange-right{background:#fff;padding:24px 20px}.arrange-left{border-right:1px solid var(--v2-line);overflow:auto}.arrange-right{border-left:1px solid var(--v2-line)}.back-link{color:#64748b;font-size:11px;text-decoration:none}.meeting-title-block{padding:18px 0 14px}.meeting-title-block h1{font-size:19px;line-height:1.35;margin:0 0 6px}.meeting-title-block p{font-size:11px;color:#94a3b8;margin:0}.summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding-bottom:18px;border-bottom:1px solid #edf0f4}.summary-strip span{text-align:center;color:#94a3b8;font-size:9px}.summary-strip b{display:block;color:#334155;font-size:14px;margin-bottom:2px}.side-head{display:flex;justify-content:space-between;align-items:center;margin-top:18px}.side-head strong{font-size:13px}.side-head a{font-size:10px;color:#2458d3;text-decoration:none}.rule-note{font-size:9px;line-height:1.6;color:#94a3b8}.rank-list{display:grid;gap:5px}.rank-item{display:grid;grid-template-columns:24px 1fr auto auto;gap:7px;align-items:center;padding:8px;border-radius:9px}.rank-item:hover{background:#f8fafc}.rank-no{font-size:10px;color:#94a3b8;text-align:center}.rank-person{min-width:0}.rank-person strong{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rank-person small{display:block;color:#94a3b8;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}.seat-badge{font-size:8px;background:#f1f5f9;color:#64748b;padding:3px 5px;border-radius:999px}.seat-badge.stage{background:#eef0ff;color:#5658aa}.rank-actions{display:flex;gap:2px;opacity:0}.rank-item:hover .rank-actions{opacity:1}.rank-actions button{width:22px;height:22px;border:0;border-radius:6px;background:#eef2f7;color:#64748b;cursor:pointer}.side-empty{text-align:center;color:#94a3b8;font-size:11px;padding:30px}.arrange-center{padding:26px 30px 38px;overflow:auto;background:#f7f9fc}.workspace-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:20px}.workspace-head h2{font-size:22px;margin:4px 0}.workspace-head p{margin:0;color:#718096;font-size:11px}.workspace-actions{display:flex;gap:8px;align-items:center}.workspace-actions form{margin:0}.front-label,.back-label{text-align:center;color:#94a3b8;font-size:9px;letter-spacing:.14em;margin:8px}.meeting-canvas{display:flex;justify-content:center}.meeting-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(62px,92px));gap:10px;padding:22px 26px;background:#fff;border:1px solid var(--v2-line);border-radius:18px;box-shadow:0 12px 36px rgba(15,23,42,.045);min-width:max-content}.meeting-cell{height:64px;border-radius:10px;border:1px solid #d8e1ef;background:#f2f7ff;color:#40587c;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;font-size:10px;transition:.13s;user-select:none}.meeting-cell[data-inspectable]{cursor:pointer}.meeting-cell[data-inspectable]:hover{transform:translateY(-2px);box-shadow:0 5px 14px rgba(15,23,42,.09);border-color:#aac0e9}.meeting-cell.selected{outline:2px solid #2458d3;outline-offset:2px}.meeting-cell strong{font-size:11px;max-width:88%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meeting-cell small{font-size:8px;color:#8291a8;margin-top:4px;max-width:88%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meeting-cell.role-stage.cell-seat{background:#eef0ff;border-color:#c5c9ff;color:#5057a6}.meeting-cell.is-locked{border-color:#e2b45b;background:#fff9ec}.meeting-cell.is-skipped{background:#f4f4f5;border:1px dashed #cbd0d8;color:#9ca3af}.meeting-cell.cell-aisle{background:transparent;border:1px dashed #e0e5eb;color:#b0b8c4}.meeting-cell.cell-podium{background:#fff7e8;border-color:#ecd7b1;color:#9b794f}.meeting-cell.cell-empty{background:transparent;border:0;color:#d0d5dc}.physical-label,.seat-position{font-size:9px}.lock-mark{position:absolute;right:5px;top:5px;background:#fff0c8;color:#986b13;border-radius:5px;padding:2px 4px;font-size:7px}.cell-icon{font-size:17px;margin-bottom:2px}.canvas-footer{display:flex;justify-content:center;align-items:center;gap:13px;margin-top:16px;font-size:9px;color:#94a3b8}.canvas-footer span{display:flex;align-items:center;gap:4px}.canvas-footer b{font-weight:500;color:#718096;margin-left:10px}.legend-dot{width:8px;height:8px;border-radius:3px;background:#d8e5f8}.legend-dot.stage{background:#bfc5ff}.legend-dot.locked{background:#f0c66d}.legend-dot.skipped{background:#d4d7dc}.arrange-right{padding-top:28px}.inspector-card,.tips-card,.print-card{border:1px solid var(--v2-line);border-radius:14px;padding:16px;margin-bottom:12px}.inspect-empty{text-align:center;padding:24px 4px}.inspect-seat-icon{width:48px;height:48px;border:1px dashed #cbd5e1;border-radius:12px;margin:0 auto 10px;display:grid;place-items:center;color:#94a3b8;font-size:22px}.inspect-empty strong{font-size:12px}.inspect-empty p,.tips-card p{font-size:10px;color:#94a3b8;line-height:1.6}.inspect-position{font-size:10px;color:#94a3b8;margin-top:10px}.inspector-card h2{font-size:18px;margin:6px 0}.inspector-card .muted{font-size:11px;margin:0 0 12px}.inspect-status{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:13px}.inspect-status span{font-size:9px;border-radius:999px;padding:4px 7px;background:#f1f5f9;color:#64748b}.inspect-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}.tips-card strong,.print-card strong{font-size:11px}.print-card{display:grid;gap:8px}.print-card strong{margin-bottom:2px}.print-card a{display:flex;justify-content:space-between;text-decoration:none;color:#334155;font-size:10px;padding:8px 0;border-top:1px solid #f1f3f6}.print-card a span{color:#2458d3}@media(max-width:1100px){.arrange-shell{grid-template-columns:240px 1fr}.arrange-right{display:none}}@media(max-width:760px){.arrange-shell{display:block}.arrange-left{border-right:0}.rank-list{max-height:250px;overflow:auto}.arrange-center{padding:20px 12px}.workspace-head{align-items:flex-start;flex-direction:column}.meeting-grid{gap:6px;padding:16px;grid-template-columns:repeat(var(--cols),minmax(52px,72px))}.meeting-cell{height:56px}}@media print{header,.arrange-left,.arrange-right,.workspace-head,.canvas-footer{display:none!important}.arrange-shell{display:block}.arrange-center{padding:0;background:#fff}.meeting-grid{box-shadow:none}}
+</style>
 <script>
-let dragSeat=null;
-document.querySelectorAll('.meeting-seat[data-seat-id]').forEach(el=>{
- if(el.draggable) el.addEventListener('dragstart',()=>dragSeat=el.dataset.seatId);
- el.addEventListener('dragover',e=>e.preventDefault());
- el.addEventListener('drop',async e=>{
-  e.preventDefault(); const target=el.dataset.seatId; if(!dragSeat||dragSeat===target)return;
-  const body=new URLSearchParams({seat_a:dragSeat,seat_b:target});
-  const token=document.querySelector('meta[name="csrf-token"]').content;
-  const r=await fetch('/meetings/{{meeting.id}}/swap/',{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body});
-  if(r.ok) location.reload(); else alert((await r.json()).error||'换座失败');
- });
+let dragSeat=null, selectedSeat=null;
+const token=document.querySelector('meta[name="csrf-token"]').content;
+const cells=[...document.querySelectorAll('.meeting-cell[data-inspectable]')];
+function inspect(cell){
+  cells.forEach(x=>x.classList.remove('selected')); cell.classList.add('selected'); selectedSeat=cell;
+  document.getElementById('inspectEmpty').hidden=true; document.getElementById('inspectBody').hidden=false;
+  document.getElementById('inspectPosition').textContent='第 '+cell.dataset.row+' 行 · 第 '+cell.dataset.col+' 列';
+  document.getElementById('inspectName').textContent=cell.dataset.name||'空座';
+  document.getElementById('inspectDept').textContent=cell.dataset.dept||'当前没有安排人员';
+  const locked=cell.dataset.locked==='1', skipped=cell.dataset.skipped==='1';
+  document.getElementById('inspectStatus').innerHTML=(locked?'<span>🔒 已锁定</span>':'<span>正常座位</span>')+(skipped?'<span>⊘ 已跳过</span>':'');
+  document.getElementById('lockButton').textContent=locked?'解除锁定':'锁定座位';
+  document.getElementById('skipButton').textContent=skipped?'恢复座位':'跳过座位';
+}
+async function seatAction(action){
+  if(!selectedSeat)return;
+  const r=await fetch('/meetings/{{meeting.id}}/seat/'+selectedSeat.dataset.seatId+'/state/',{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action})});
+  if(r.ok) location.reload(); else alert('操作失败，请重试');
+}
+cells.forEach(el=>{
+  el.addEventListener('click',()=>inspect(el));
+  if(el.draggable) el.addEventListener('dragstart',()=>{dragSeat=el.dataset.seatId;el.classList.add('dragging')});
+  el.addEventListener('dragend',()=>el.classList.remove('dragging'));
+  el.addEventListener('dragover',e=>{if(el.dataset.locked!=='1'&&el.dataset.skipped!=='1')e.preventDefault()});
+  el.addEventListener('drop',async e=>{
+    e.preventDefault(); const target=el.dataset.seatId; if(!dragSeat||dragSeat===target)return;
+    const r=await fetch('/meetings/{{meeting.id}}/swap/',{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({seat_a:dragSeat,seat_b:target})});
+    if(r.ok) location.reload(); else {const data=await r.json().catch(()=>({}));alert(data.error||'换座失败')}
+  });
 });
+document.getElementById('lockButton').onclick=()=>seatAction(selectedSeat&&selectedSeat.dataset.locked==='1'?'unlock':'lock');
+document.getElementById('skipButton').onclick=()=>seatAction(selectedSeat&&selectedSeat.dataset.skipped==='1'?'unskip':'skip');
 </script>{% endblock %}
