@@ -5,6 +5,9 @@ from . import meeting_views as views
 urlpatterns = [
     path('', views.meeting_home, name='index'),
     path('meetings/', views.meeting_home, name='meeting_home'),
+    path('people/', views.participant_library, name='participant_library'),
+    path('history/', views.meeting_history, name='meeting_history'),
+    path('settings/', views.meeting_settings, name='meeting_settings'),
     path('meetings/create/', views.meeting_create, name='meeting_create'),
     path('meetings/<int:pk>/', views.meeting_detail, name='meeting_detail'),
     path('meetings/<int:pk>/arrange/', views.meeting_arrange, name='meeting_arrange'),
