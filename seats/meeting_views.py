@@ -137,15 +137,25 @@ def meeting_detail(request, pk):
     from .meeting_seating import participant_sort_key
     preview_members=sorted([m for m in members if m.include], key=lambda m: participant_sort_key(m.participant))
     preview=[m.participant for m in preview_members]
-    assignments={a.seat_id:a for a in meeting.assignments.select_related('participant','seat')}
+    assignment_list=list(meeting.assignments.select_related('participant__department','participant__personnel_level','seat'))
+    assignments={a.seat_id:a for a in assignment_list}
+    seat_map={(s.row,s.col):s for s in meeting.venue.seats.all()}
     grid=[]
     for r in range(1, meeting.venue.rows+1):
         row=[]
         for col in range(1, meeting.venue.cols+1):
-            seat=next((s for s in meeting.venue.seats.all() if s.row==r and s.col==col),None)
+            seat=seat_map.get((r,col))
             row.append((seat, assignments.get(seat.id) if seat else None))
         grid.append(row)
-    return render(request,'seats/meeting_detail.html',{'meeting':meeting,'preview':preview,'preview_members':preview_members,'grid':grid})
+    return render(request,'seats/meeting_detail.html',{
+        'meeting':meeting,
+        'preview':preview,
+        'preview_members':preview_members,
+        'grid':grid,
+        'assigned_count':sum(1 for a in assignment_list if a.participant_id),
+        'locked_count':sum(1 for a in assignment_list if a.locked),
+        'skipped_count':sum(1 for a in assignment_list if a.skipped),
+    })
 
 @require_POST
 def meeting_arrange(request, pk):
