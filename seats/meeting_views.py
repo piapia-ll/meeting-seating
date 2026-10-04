@@ -8,17 +8,29 @@ from django.views.decorators.http import require_POST
 from app_paths import database_path, temp_directory
 from .models import Classroom, DeskCardTemplate, Meeting, MeetingParticipant, MeetingSeatAssignment, Participant, ParticipantCategory, PersonnelLevel, PoliceDepartment, Seat, SeatCellType
 
-def meeting_home(request):
+def _meeting_workspace_context():
     all_participants=Participant.objects.select_related('department','personnel_level').all()
-    return render(request, 'seats/meeting_home.html', {
+    return {
         'meetings': Meeting.objects.select_related('venue').all()[:100],
         'venues': Classroom.objects.all().order_by('name'),
         'participants': all_participants.filter(active=True),
         'all_participants': all_participants,
-        'levels': PersonnelLevel.objects.filter(active=True),
-        'departments': PoliceDepartment.objects.filter(active=True),
+        'levels': PersonnelLevel.objects.all(),
+        'departments': PoliceDepartment.objects.all(),
         'desk_card_templates': {x.kind:x for x in DeskCardTemplate.objects.all()},
-    })
+    }
+
+def meeting_home(request):
+    return render(request, 'seats/meeting_home.html', _meeting_workspace_context())
+
+def participant_library(request):
+    return render(request, 'seats/participant_library.html', _meeting_workspace_context())
+
+def meeting_history(request):
+    return render(request, 'seats/meeting_history.html', _meeting_workspace_context())
+
+def meeting_settings(request):
+    return render(request, 'seats/meeting_settings.html', _meeting_workspace_context())
 
 @require_POST
 def meeting_create(request):
@@ -83,17 +95,17 @@ def participant_create(request):
         attendee_order=int(request.POST.get('attendee_order') or 100),
         personal_order=int(request.POST.get('personal_order') or 100),
     )
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 @require_POST
 def department_create(request):
     PoliceDepartment.objects.create(name=request.POST['name'].strip(),short_name=(request.POST.get('short_name') or '').strip(),order=int(request.POST.get('order') or 100))
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 @require_POST
 def level_create(request):
     PersonnelLevel.objects.create(name=request.POST['name'].strip(),order=int(request.POST.get('order') or 100))
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 
 @require_POST
@@ -166,13 +178,13 @@ def participant_update(request, participant_id):
     p.active=request.POST.get('active')=='on'
     p.remark=(request.POST.get('remark') or '').strip()
     p.save()
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 @require_POST
 def participant_toggle(request, participant_id):
     p=get_object_or_404(Participant, pk=participant_id)
     p.active=not p.active; p.save(update_fields=['active'])
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 @require_POST
 def meeting_update(request, pk):
@@ -192,7 +204,7 @@ def meeting_update(request, pk):
 @require_POST
 def meeting_delete(request, pk):
     meeting=get_object_or_404(Meeting, pk=pk); meeting.delete()
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 def participants_export(request):
     wb=openpyxl.Workbook(); ws=wb.active; ws.title='人员库'
@@ -239,7 +251,7 @@ def participants_import(request):
                 'active':str(vals[8] or '是').strip() not in ('否','0','False','false'),'remark':str(vals[9] or '').strip(),
             })
             imported += 1
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 
 @require_POST
@@ -254,7 +266,7 @@ def desk_card_template_update(request):
         source=request.POST.get(f'{kind}_content_source') or ds
         obj.content_source=source if source in ('person','department') else ds
         obj.active=True; obj.save()
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 
 def meeting_print_chart(request, pk):
@@ -320,11 +332,11 @@ def department_update(request, department_id):
     d=get_object_or_404(PoliceDepartment,pk=department_id)
     d.name=(request.POST.get('name') or d.name).strip(); d.short_name=(request.POST.get('short_name') or '').strip()
     d.order=int(request.POST.get('order') or 100); d.active=request.POST.get('active')=='on'; d.save()
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
 
 @require_POST
 def level_update(request, level_id):
     x=get_object_or_404(PersonnelLevel,pk=level_id)
     x.name=(request.POST.get('name') or x.name).strip(); x.order=int(request.POST.get('order') or 100)
     x.active=request.POST.get('active')=='on'; x.save()
-    return redirect('meeting_home')
+    return redirect(request.POST.get('next') or 'meeting_home')
